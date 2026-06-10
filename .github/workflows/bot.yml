@@ -2,13 +2,13 @@ name: Test Run Node.js
 
 on:
   schedule:
-    - cron: '*/60 * * * *'
+    - cron: '*/120 * * * *'
   workflow_dispatch:
 
 jobs:
   bot-with-tunnel:
     runs-on: ubuntu-latest
-    timeout-minutes: 59
+    timeout-minutes: 119
     
     steps:
       - name: Checkout kode
