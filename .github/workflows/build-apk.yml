@@ -42,7 +42,34 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.19.0'  # Pakai versi spesifik yang stabil
+      
+      - name: Enable Flutter Web (fix)
+        run: flutter config --enable-web
+      
+      - name: Create missing folders
+        run: |
+          mkdir -p assets/images assets/videos assets/icon fonts
+          touch assets/images/title.png
+          touch assets/images/logo.png
+          touch assets/images/bokep.png
+          touch assets/videos/splash.mp4
+      
+      - name: Clean cache
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+      
+      - name: Modify pubspec.yaml (downgrade youtube_player_flutter)
+        run: |
+          # Backup pubspec.yaml
+          cp pubspec.yaml pubspec.yaml.bak
+          # Ganti youtube_player_flutter ke versi kompatibel
+          sed -i 's/youtube_player_flutter: ^9.1.3/youtube_player_flutter: 8.4.0/g' pubspec.yaml
+          sed -i 's/youtube_player_flutter: ^9.1.0/youtube_player_flutter: 8.4.0/g' pubspec.yaml
+          sed -i 's/youtube_player_flutter: ^9.0.0/youtube_player_flutter: 8.4.0/g' pubspec.yaml
+          echo "✅ pubspec.yaml sudah dimodifikasi"
+          cat pubspec.yaml | grep youtube_player_flutter
       
       - name: Install dependencies
         run: flutter pub get
