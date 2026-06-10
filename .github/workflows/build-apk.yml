@@ -30,27 +30,49 @@ jobs:
         with:
           flutter-version: '3.22.0'
       
-      - name: Fix semua error di pubspec.yaml
+      - name: Buat pubspec.yaml baru dari awal
         run: |
-          # Hapus seluruh bagian flutter_launcher_icons
-          sed -i '/^flutter_launcher_icons:/,/^[a-z]/d' pubspec.yaml
-          # Hapus baris yang mengandung android: true
-          sed -i '/android: true/d' pubspec.yaml
-          sed -i '/ios: true/d' pubspec.yaml
-          # Hapus youtube_player_flutter
-          sed -i '/youtube_player_flutter:/d' pubspec.yaml
-          # FIX INDENTASI uses-material-design
-          sed -i 's/^uses-material-design:/  uses-material-design:/g' pubspec.yaml
-          sed -i 's/^  uses-material-design:/  uses-material-design:/g' pubspec.yaml
-          echo "✅ pubspec.yaml sudah dibersihkan"
-          cat pubspec.yaml | grep -A2 "flutter:"
+          # Backup dulu
+          cp pubspec.yaml pubspec.yaml.bak
+          
+          # Ekstrak nama dan deskripsi dari pubspec lama
+          APP_NAME=$(grep "^name:" pubspec.yaml | head -1 | cut -d' ' -f2)
+          APP_DESC=$(grep "^description:" pubspec.yaml | head -1 | cut -d' ' -f2-)
+          
+          # Buat pubspec.yaml baru yang BENER
+          cat > pubspec.yaml << 'EOF'
+name: $APP_NAME
+description: $APP_DESC
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+EOF
+          
+          echo "✅ pubspec.yaml baru dibuat"
+          cat pubspec.yaml
       
-      - name: Create dummy assets
+      - name: Copy dependencies dari backup
         run: |
-          mkdir -p assets/icon
-          touch assets/icon/icon.jpg
+          # Ambil dependencies dari backup (kecuali yang bermasalah)
+          sed -n '/^dependencies:/,/^dev_dependencies:/p' pubspec.yaml.bak | grep -v "flutter:" | grep -v "sdk:" | grep -v "youtube_player_flutter" | grep -v "flutter_launcher_icons" >> pubspec.yaml
+          sed -n '/^dev_dependencies:/,/^flutter:/p' pubspec.yaml.bak | grep -v "flutter_test" | grep -v "flutter_lints" | grep -v "flutter_launcher_icons" >> pubspec.yaml
+          
+          echo "✅ Dependencies ditambahkan"
       
-      - name: Build APK
+      - name: Install dependencies & Build
         run: |
           flutter clean
           flutter pub get
