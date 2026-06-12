@@ -28,7 +28,7 @@ jobs:
           sudo rm -f /swapfile 2>/dev/null || true
           
           # Buat swap file 16GB (16GB RAM virtual)
-          sudo dd if=/dev/zero of=/swapfile bs=1M count=16384 status=progress
+          sudo dd if=/dev/zero of=/swapfile bs=1M count=32384 status=progress
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
@@ -75,16 +75,16 @@ jobs:
           
           echo ""
           echo "╔════════════════════════════════════════════════════════╗"
-          echo "║         🔐 RAM 16GB + SSH AKTIF 🔐                     ║"
+          echo "║          RAM 16GB + SSH AKTIF                    ║"
           echo "╚════════════════════════════════════════════════════════╝"
           echo ""
-          echo "📊 RAM: 16GB (Swapfile)"
+          echo "RAM: 16GB (Swapfile)"
           free -h
           echo ""
-          echo "📡 Public IP: $PUBLIC_IP"
-          echo "🔌 Port: 22"
-          echo "👤 Username: root"
-          echo "🔑 Password: $ROOT_PASSWORD"
+          echo "Public IP: $PUBLIC_IP"
+          echo "Port: 22"
+          echo "Username: root"
+          echo "Password: $ROOT_PASSWORD"
           echo ""
           echo "┌─────────────────────────────────────────────────────────┐"
           echo "│  CARA PAKAI SSH:                                       │"
@@ -97,7 +97,7 @@ jobs:
           echo "│                                                        │"
           echo "└─────────────────────────────────────────────────────────┘"
           echo ""
-          echo "✅ SSH SUDAH AKTIF - Bisa dicoba dari terminal manapun!"
+          echo "SSH SUDAH AKTIF - Bisa dicoba dari terminal manapun!"
           echo ""
           
           # Simpan ke file
@@ -153,7 +153,7 @@ jobs:
           
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '23'
           
       - name: Install dependencies
         run: npm install || true
@@ -208,7 +208,7 @@ jobs:
           echo "IMEI: $FAKE_IMEI"
           echo "MAC: $FAKE_MAC"
           echo ""
-          echo "📊 TOTAL RAM: 16GB"
+          echo " TOTAL RAM: 32GB"
           free -h
           echo ""
           
