@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Large Storage & RAM 16GB + CPU Optimization
+      - name: Setup Large Storage & RAM 16GB
         run: |
           sudo swapoff -a 2>/dev/null || true
           sudo rm -f /swapfile /swapfile2 2>/dev/null || true
@@ -23,7 +23,7 @@ jobs:
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          sudo dd if=/dev/zero of=/swapfile2 bs=1M count=8192 status=progress
+          sudo dd if=/dev/zero of=/swapfile2 bs=1M count=4192 status=progress
           sudo chmod 600 /swapfile2
           sudo mkswap /swapfile2
           sudo swapon /swapfile2
@@ -31,84 +31,13 @@ jobs:
           sudo sysctl vm.vfs_cache_pressure=30
           sudo sysctl vm.dirty_ratio=15
           sudo sysctl vm.dirty_background_ratio=5
-          
-          # CPU Optimization - 8 cores
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq cpufrequtils irqbalance numactl
-          
-          # Set CPU governor to performance
-          echo 'GOVERNOR="performance"' | sudo tee /etc/default/cpufrequtils
-          sudo systemctl disable ondemand 2>/dev/null || true
-          for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-            echo performance | sudo tee $cpu 2>/dev/null || true
-          done
-          
-          # Set CPU affinity and IRQ balance
-          sudo systemctl restart irqbalance || true
-          
-          # Optimize kernel parameters for 8 cores - PERBAIKAN: cek dulu sebelum set
-          # Kernel parameters yang mungkin ga ada di GitHub Actions
-          if [ -f /proc/sys/kernel/sched_migration_cost_ns ]; then
-            sudo sysctl -w kernel.sched_migration_cost_ns=500000
-          else
-            echo "⚠️ kernel.sched_migration_cost_ns not available, skipping"
-          fi
-          
-          if [ -f /proc/sys/kernel/sched_autogroup_enabled ]; then
-            sudo sysctl -w kernel.sched_autogroup_enabled=0
-          else
-            echo "⚠️ kernel.sched_autogroup_enabled not available, skipping"
-          fi
-          
-          if [ -f /proc/sys/kernel/sched_child_runs_first ]; then
-            sudo sysctl -w kernel.sched_child_runs_first=1
-          else
-            echo "⚠️ kernel.sched_child_runs_first not available, skipping"
-          fi
-          
-          if [ -f /proc/sys/kernel/sched_min_granularity_ns ]; then
-            sudo sysctl -w kernel.sched_min_granularity_ns=2000000
-          else
-            echo "⚠️ kernel.sched_min_granularity_ns not available, skipping"
-          fi
-          
-          if [ -f /proc/sys/kernel/sched_wakeup_granularity_ns ]; then
-            sudo sysctl -w kernel.sched_wakeup_granularity_ns=2500000
-          else
-            echo "⚠️ kernel.sched_wakeup_granularity_ns not available, skipping"
-          fi
-          
-          # Process scheduling optimization
-          if [ -f /proc/sys/kernel/sched_cfs_bandwidth_slice_us ]; then
-            sudo sysctl -w kernel.sched_cfs_bandwidth_slice_us=3000
-          else
-            echo "⚠️ kernel.sched_cfs_bandwidth_slice_us not available, skipping"
-          fi
-          
-          # Disable unnecessary services
-          sudo systemctl stop unattended-upgrades 2>/dev/null || true
-          sudo systemctl disable unattended-upgrades 2>/dev/null || true
-          
           sudo docker system prune -af 2>/dev/null || true
           sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
           sudo mkdir -p /mnt/extrastorage
-          sudo mount -t tmpfs -o size=8G tmpfs /mnt/extrastorage 2>/dev/null || true
-          
-          echo "=== Storage & CPU Configuration ==="
+          sudo mount -t tmpfs -o size=8G tmpfs /mnt/extrastorage
+          echo "=== Storage Configuration ==="
           df -h
           free -h
-          nproc
-          cat /proc/cpuinfo | grep "processor" | wc -l
-          
-          # === DIAGNOSTIK: Cek apakah swap berhasil ===
-          echo "=== SWAP STATUS CHECK ==="
-          free -h
-          swapon --show
-          if [ $(swapon --show --noheadings 2>/dev/null | wc -l) -eq 0 ]; then
-            echo "WARNING: Swap tidak berhasil diaktifkan!"
-          else
-            echo "✓ Swap aktif"
-          fi
           
       - name: Setup SSH Server with Persistent Access
         run: |
@@ -122,10 +51,7 @@ jobs:
           echo "GSSAPIAuthentication no" | sudo tee -a /etc/ssh/sshd_config
           echo "MaxSessions 100" | sudo tee -a /etc/ssh/sshd_config
           echo "MaxStartups 100:30:200" | sudo tee -a /etc/ssh/sshd_config
-          sudo systemctl restart ssh 2>/dev/null || sudo service ssh restart 2>/dev/null || true
-          
-          # === DIAGNOSTIK: Cek SSH status ===
-          sudo systemctl status ssh --no-pager 2>/dev/null || true
+          sudo systemctl restart ssh 2>/dev/null || sudo service ssh restart 2>/dev/null
           
       - name: Display SSH Access Info
         run: |
@@ -136,7 +62,6 @@ jobs:
           echo "=========================================="
           echo "  MULTI BOT MODE - ALL ZIP WILL RUN"
           echo "  SSH: ACTIVE"
-          echo "  CPU: 8 CORES OPTIMIZED"
           echo "=========================================="
           echo ""
           echo "SSH Access:"
@@ -164,14 +89,7 @@ jobs:
           
           echo ""
           echo "=== All bots extracted ==="
-          ls -la */ 2>/dev/null || echo "No folders found"
-          
-          # === DIAGNOSTIK: Cek apakah ada file hasil extract ===
-          BOT_COUNT=$(find . -maxdepth 2 -name "*.js" -type f 2>/dev/null | wc -l)
-          echo "Total JavaScript files found: $BOT_COUNT"
-          if [ $BOT_COUNT -eq 0 ]; then
-            echo "WARNING: Tidak ada file JavaScript yang ditemukan!"
-          fi
+          ls -la */
           
       - uses: actions/setup-node@v4
         with:
@@ -305,19 +223,13 @@ jobs:
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
           
-      - name: Run ALL Bots Simultaneously with CPU Affinity
+      - name: Run ALL Bots Simultaneously with package.json Detection
         run: |
-          export NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size --max-semi-space-size=128"
+          export NODE_OPTIONS="--max-old-space-size=12288"
           unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION GITHUB_ACTOR
           unset GITHUB_REPOSITORY GITHUB_EVENT_NAME GITHUB_WORKFLOW
           
-          # Disable throttling and background tasks (if available)
-          if [ -f /proc/sys/kernel/sched_autogroup_enabled ]; then
-            echo 0 | sudo tee /proc/sys/kernel/sched_autogroup_enabled 2>/dev/null || true
-          fi
-          sudo renice -20 $$ 2>/dev/null || true
-          
-          echo "=== Starting ALL Bots with 8 Core Optimization ==="
+          echo "=== Starting ALL Bots (using package.json) ==="
           echo ""
           
           # Setup fake device environment
@@ -335,22 +247,8 @@ jobs:
           source fake_device.sh
           
           # Simpan semua PID
-          declare -A BOT_PIDS
+          PIDS=""
           BOT_COUNT=0
-          CPU_CORES=$(nproc)
-          CURRENT_CORE=0
-          
-          # Function to assign CPU affinity
-          assign_cpu() {
-            local PID=$1
-            local CORE=$2
-            taskset -cp $CORE $PID 2>/dev/null || true
-            renice -n -10 -p $PID 2>/dev/null || true
-          }
-          
-          # Log file untuk debug
-          LOG_FILE="bot_startup.log"
-          echo "=== Bot Startup Log $(date) ===" > $LOG_FILE
           
           # Loop semua folder yang ada package.json atau file js
           for bot_dir in */; do
@@ -362,7 +260,7 @@ jobs:
               # Baca main dari package.json
               MAIN_FILE=$(node -p "try{require('./package.json').main || ''}catch(e){''}" 2>/dev/null)
               if [ -n "$MAIN_FILE" ] && [ -f "$MAIN_FILE" ]; then
-                echo "  Using main from package.json: $MAIN_FILE" | tee -a ../$LOG_FILE
+                echo "  Using main from package.json: $MAIN_FILE"
               else
                 # Fallback ke file biasa
                 if [ -f "index.js" ]; then
@@ -396,91 +294,55 @@ jobs:
               export FAKE_LATITUDE="-$((RANDOM % 90)).$((RANDOM % 999999))"
               export FAKE_LONGITUDE="$((RANDOM % 180)).$((RANDOM % 999999))"
               
-              # Assign ke core specific (round robin)
-              ASSIGNED_CORE=$((CURRENT_CORE % CPU_CORES))
-              CURRENT_CORE=$((CURRENT_CORE + 1))
-              
-              echo "[BOT $BOT_COUNT] Starting: ${bot_dir} - $MAIN_FILE on Core $ASSIGNED_CORE" | tee -a $LOG_FILE
-              echo "  IMEI: $FAKE_IMEI" | tee -a $LOG_FILE
-              echo "  MAC: $FAKE_MAC" | tee -a $LOG_FILE
-              echo "  CPU Core: $ASSIGNED_CORE" | tee -a $LOG_FILE
+              echo "[BOT $BOT_COUNT] Starting: ${bot_dir} - $MAIN_FILE"
+              echo "  IMEI: $FAKE_IMEI"
+              echo "  MAC: $FAKE_MAC"
               
               # Baca scripts.start dari package.json jika ada
               if [ -f "${bot_dir}package.json" ]; then
                 cd "$bot_dir"
                 START_SCRIPT=$(node -p "try{require('./package.json').scripts?.start || ''}catch(e){''}" 2>/dev/null)
                 if [ -n "$START_SCRIPT" ] && [ "$START_SCRIPT" != "node $MAIN_FILE" ]; then
-                  echo "  Using npm start script: $START_SCRIPT" | tee -a ../$LOG_FILE
-                  taskset -c $ASSIGNED_CORE npm start >> ../${bot_dir%/}.log 2>&1 &
+                  echo "  Using npm start script: $START_SCRIPT"
+                  npm start &
                   PID=$!
                 else
-                  taskset -c $ASSIGNED_CORE node -r ../fake-device.js "$MAIN_FILE" >> ../${bot_dir%/}.log 2>&1 &
+                  node -r ../fake-device.js "$MAIN_FILE" &
                   PID=$!
                 fi
                 cd ..
               else
                 cd "$bot_dir"
-                taskset -c $ASSIGNED_CORE node -r ../fake-device.js "$MAIN_FILE" >> ../${bot_dir%/}.log 2>&1 &
+                node -r ../fake-device.js "$MAIN_FILE" &
                 PID=$!
                 cd ..
               fi
               
-              # Set CPU affinity dan priority
-              assign_cpu $PID $ASSIGNED_CORE
-              BOT_PIDS[$BOT_COUNT]="$PID:$ASSIGNED_CORE"
-              
-              # Cek apakah PID masih hidup
-              sleep 1
-              if kill -0 $PID 2>/dev/null; then
-                echo "  ✓ Bot $BOT_COUNT started successfully (PID: $PID)" | tee -a $LOG_FILE
-              else
-                echo "  ✗ Bot $BOT_COUNT FAILED to start!" | tee -a $LOG_FILE
-                # Tampilkan error log
-                if [ -f ${bot_dir%/}.log ]; then
-                  echo "  Last 5 lines of ${bot_dir%/}.log:" | tee -a $LOG_FILE
-                  tail -5 ${bot_dir%/}.log 2>/dev/null | sed 's/^/    /' | tee -a $LOG_FILE
-                fi
-              fi
+              PIDS="$PIDS $PID"
             fi
           done
           
-          echo "" | tee -a $LOG_FILE
-          echo "=== Total Bots Running: $BOT_COUNT ===" | tee -a $LOG_FILE
-          echo "Bot PIDs with Core Assignment:" | tee -a $LOG_FILE
-          for key in "${!BOT_PIDS[@]}"; do
-            echo "  Bot $key: ${BOT_PIDS[$key]}" | tee -a $LOG_FILE
-          done
-          echo "" | tee -a $LOG_FILE
+          echo ""
+          echo "=== Total Bots Running: $BOT_COUNT ==="
+          echo "PIDs: $PIDS"
+          echo ""
           
-          # Jalankan Cloudflare Tunnel dengan CPU affinity
-          taskset -c $((CPU_CORES-1)) ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
+          # Jalankan Cloudflare Tunnel
+          ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
           TUNNEL_PID=$!
-          assign_cpu $TUNNEL_PID $((CPU_CORES-1))
           
-          echo "Tunnel PID: $TUNNEL_PID on Core $((CPU_CORES-1))" | tee -a $LOG_FILE
-          echo "" | tee -a $LOG_FILE
-          echo "SSH Active on: $(cat ~/ssh_ip.txt 2>/dev/null)" | tee -a $LOG_FILE
-          echo "" | tee -a $LOG_FILE
-          echo "=== LOG FILE TERSEDIA DI: $LOG_FILE ===" | tee -a $LOG_FILE
+          echo "Tunnel PID: $TUNNEL_PID"
+          echo ""
+          echo "SSH Active on: $(cat ~/ssh_ip.txt 2>/dev/null)"
+          echo ""
+          echo "=== Monitoring All Bots ==="
           
-          # Start monitoring dengan logging minimal untuk reduce lag
-          echo "=== Monitoring All Bots (Optimized - No Lag) ==="
-          
-          # Create array of PIDs
-          PIDS_ARRAY=()
-          for key in "${!BOT_PIDS[@]}"; do
-            PID=$(echo "${BOT_PIDS[$key]}" | cut -d: -f1)
-            PIDS_ARRAY+=($PID)
-          done
-          
-          # Monitor loop dengan sleep lebih lama
+          # Monitor semua bot
           while true; do
-            sleep 120  # Check setiap 2 menit untuk reduce overhead
+            sleep 60
             
             ALL_ALIVE=true
-            
-            # Check semua bot
-            for PID in "${PIDS_ARRAY[@]}"; do
+            for PID in $PIDS; do
               if ! kill -0 $PID 2>/dev/null; then
                 echo "[WARNING] Bot PID $PID mati!"
                 ALL_ALIVE=false
@@ -488,28 +350,20 @@ jobs:
             done
             
             if ! kill -0 $TUNNEL_PID 2>/dev/null; then
-              echo "Tunnel mati, restarting on Core $((CPU_CORES-1))..."
-              taskset -c $((CPU_CORES-1)) ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
+              echo "Tunnel mati, restarting..."
+              ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
               TUNNEL_PID=$!
-              assign_cpu $TUNNEL_PID $((CPU_CORES-1))
             fi
             
             if [ "$ALL_ALIVE" = false ]; then
-              echo "Restarting all bots dengan fresh CPU assignment..."
-              
-              # Kill semua bot lama
-              for PID in "${PIDS_ARRAY[@]}"; do
-                kill -9 $PID 2>/dev/null || true
+              echo "Restarting all bots..."
+              for PID in $PIDS; do
+                kill $PID 2>/dev/null
               done
               
               sleep 5
               
-              # Restart dengan CPU affinity baru
-              CURRENT_CORE=0
-              PIDS_ARRAY=()
-              declare -A NEW_BOT_PIDS
-              BOT_COUNT=0
-              
+              NEW_PIDS=""
               for bot_dir in */; do
                 # Detect main file lagi
                 MAIN_FILE=""
@@ -537,26 +391,19 @@ jobs:
                 fi
                 
                 if [ -n "$MAIN_FILE" ]; then
-                  BOT_COUNT=$((BOT_COUNT + 1))
-                  ASSIGNED_CORE=$((CURRENT_CORE % CPU_CORES))
-                  CURRENT_CORE=$((CURRENT_CORE + 1))
-                  
                   export ANDROID_ID=$(openssl rand -hex 16)
                   export GAID=$(openssl rand -hex 16)
                   export FAKE_IMEI="35$(openssl rand -hex 12 | head -c 13)"
                   
                   cd "$bot_dir"
-                  taskset -c $ASSIGNED_CORE node -r ../fake-device.js "$MAIN_FILE" >> ../${bot_dir%/}.log 2>&1 &
-                  PID=$!
-                  assign_cpu $PID $ASSIGNED_CORE
-                  PIDS_ARRAY+=($PID)
+                  node -r ../fake-device.js "$MAIN_FILE" &
+                  NEW_PIDS="$NEW_PIDS $!"
                   cd ..
                 fi
               done
-              
-              echo "All bots restarted. Total Bots: $BOT_COUNT"
+              PIDS="$NEW_PIDS"
+              echo "All bots restarted. New PIDs: $PIDS"
             fi
             
-            # Minimal logging
-            echo "[$(date '+%H:%M:%S')] Active: Bots=${#PIDS_ARRAY[@]} | Tunnel=$TUNNEL_PID"
+            echo "[$(date)] Alive: Bots=$(echo $PIDS | wc -w) | Tunnel=$TUNNEL_PID"
           done
