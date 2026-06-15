@@ -1,44 +1,23 @@
-name: Bot 24/7 UNLIMITED LIMITS - MULTI BOT
+name: BOT 24/7 WITH DATA PERSISTENCE
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */1 * * *'
+    - cron: '8 */1 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: bot-247
   cancel-in-progress: false
 
 jobs:
   bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 999999999
-
+    timeout-minutes: 359
+    
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Flutter SDK 3.22.3
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.3'
-          channel: stable
-          cache: true
-
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Flutter Environment Check
-        run: |
-          flutter --version
-          java -version
-          adb --version || true
-          yes | flutter doctor --android-licenses || true
-          flutter doctor -v
-
+      
       - name: Setup Large Storage
         run: |
           sudo swapoff -a 2>/dev/null || true
@@ -62,6 +41,64 @@ jobs:
           echo "=== Storage Configuration ==="
           df -h
           free -h
+          
+      - name: Download Previous Data from Artifact
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: bot-247.yml
+          branch: main
+          name: bot-saved-data
+          path: ./restored-data
+          if_no_artifact_found: warn
+          
+      - name: Download Previous Data from Gist Backup
+        continue-on-error: true
+        run: |
+          echo "=== TRYING TO RESTORE FROM GIST BACKUP ==="
+          GIST_ID="YOUR_GIST_ID_HERE"
+          GIST_TOKEN="${{ secrets.GIST_TOKEN }}"
+          
+          if [ -n "$GIST_TOKEN" ] && [ -n "$GIST_ID" ]; then
+            curl -s -H "Authorization: token $GIST_TOKEN" \
+              "https://api.github.com/gists/$GIST_ID" > gist_data.json
+            
+            if [ -f "gist_data.json" ]; then
+              cat gist_data.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['files']['bot-backup.json']['content'])" 2>/dev/null | base64 -d 2>/dev/null | tar -xzv 2>/dev/null && echo "✅ Restored from Gist" || echo "⚠️ No valid Gist backup"
+            fi
+          else
+            echo "⚠️ Gist backup not configured (no GIST_TOKEN or GIST_ID)"
+          fi
+          
+      - name: Restore Data from Downloaded Artifact
+        run: |
+          echo "=== RESTORING PREVIOUS DATA ==="
+          
+          if [ -f "./restored-data/bot-data-backup.tar.gz" ]; then
+            echo "Found backup artifact, restoring..."
+            tar -xzf ./restored-data/bot-data-backup.tar.gz -C ./
+            echo "✅ Data restored successfully from artifact!"
+            echo ""
+            echo "Restored files:"
+            tar -tzf ./restored-data/bot-data-backup.tar.gz 2>/dev/null | head -30
+          elif [ -f "./restored-data/data-backup.tar.gz" ]; then
+            echo "Found old format backup, restoring..."
+            tar -xzf ./restored-data/data-backup.tar.gz -C ./
+            echo "✅ Old format data restored"
+          else
+            echo "⚠️ No previous data found - Starting fresh"
+          fi
+          
+          echo ""
+          echo "=== CURRENT DATA FILES ==="
+          echo "Database files:"
+          find . -name "*.db" -o -name "*.sqlite" 2>/dev/null | head -10
+          echo ""
+          echo "Session folders:"
+          find . -type d -name "session*" -o -name "sessions" -o -name "cache" -o -name "storage" 2>/dev/null | head -10
+          echo ""
+          echo "JSON data files:"
+          find . -name "*.json" -not -path "./node_modules/*" -not -name "package*.json" 2>/dev/null | head -10
           
       - name: Setup SSH Server with Persistent Access
         run: |
@@ -113,7 +150,7 @@ jobs:
           
           echo ""
           echo "=== All bots extracted ==="
-          ls -la */
+          ls -la */ 2>/dev/null | head -50
           
       - uses: actions/setup-node@v4
         with:
@@ -123,23 +160,19 @@ jobs:
         run: |
           echo "=== Installing dependencies from package.json ==="
           
-          # Install global tools
           npm install -g pm2
           
-          # Loop semua folder dan install dari package.json jika ada
           for bot_dir in */; do
             if [ -f "${bot_dir}package.json" ]; then
               echo ""
               echo ">>> Found package.json in: ${bot_dir}"
               cd "$bot_dir"
               
-              # Baca node version dari package.json jika ada
               NODE_VERSION=$(node -p "try{require('./package.json').engines?.node || ''}catch(e){''}" 2>/dev/null)
               if [ -n "$NODE_VERSION" ]; then
                 echo "  Required Node.js version: $NODE_VERSION"
               fi
               
-              # Install dependencies dari package.json
               echo "  Installing dependencies from package.json..."
               npm install --no-audit --no-fund || {
                 echo "  Warning: npm install failed, trying with --legacy-peer-deps"
@@ -152,10 +185,8 @@ jobs:
               echo ">>> No package.json in ${bot_dir}, creating and installing common deps"
               cd "$bot_dir"
               
-              # Buat package.json kalo ga ada
               npm init -y
               
-              # Install dependencies yang paling umum dipake
               npm install express axios cheerio puppeteer puppeteer-extra puppeteer-extra-plugin-stealth --no-audit --no-fund || true
               npm install socket.io ws discord.js telegraf node-fetch --no-audit --no-fund || true
               npm install request got superagent --no-audit --no-fund || true
@@ -180,12 +211,10 @@ jobs:
         run: |
           echo "=== Detecting Node.js requirements per bot ==="
           
-          # Simpan requirement tiap bot
           for bot_dir in */; do
             if [ -f "${bot_dir}package.json" ]; then
               cd "$bot_dir"
               
-              # Baca engines.node dari package.json
               NODE_REQ=$(node -p "try{require('./package.json').engines?.node || ''}catch(e){''}" 2>/dev/null)
               if [ -n "$NODE_REQ" ]; then
                 echo "${bot_dir} requires: $NODE_REQ"
@@ -194,7 +223,6 @@ jobs:
                 echo "${bot_dir} no specific node version required"
               fi
               
-              # Baca main file dari package.json
               MAIN_FILE=$(node -p "try{require('./package.json').main || ''}catch(e){''}" 2>/dev/null)
               if [ -n "$MAIN_FILE" ] && [ -f "$MAIN_FILE" ]; then
                 echo "${bot_dir}|$MAIN_FILE" >> ../bot_main_files.txt
@@ -247,7 +275,7 @@ jobs:
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
           
-      - name: Run ALL Bots Simultaneously with package.json Detection
+      - name: Run ALL Bots Simultaneously with Auto Data Save Every Hour
         run: |
           export NODE_OPTIONS="--max-old-space-size=12288"
           unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION GITHUB_ACTOR
@@ -256,7 +284,6 @@ jobs:
           echo "=== Starting ALL Bots (using package.json) ==="
           echo ""
           
-          # Setup fake device environment
           cat > fake_device.sh << 'DEVICE'
           #!/bin/bash
           export ANDROID_ID=$(openssl rand -hex 16)
@@ -270,23 +297,18 @@ jobs:
           chmod +x fake_device.sh
           source fake_device.sh
           
-          # Simpan semua PID
           PIDS=""
           BOT_COUNT=0
           
-          # Loop semua folder yang ada package.json atau file js
           for bot_dir in */; do
-            # Cek main file dari package.json dulu
             MAIN_FILE=""
             
             if [ -f "${bot_dir}package.json" ]; then
               cd "$bot_dir"
-              # Baca main dari package.json
               MAIN_FILE=$(node -p "try{require('./package.json').main || ''}catch(e){''}" 2>/dev/null)
               if [ -n "$MAIN_FILE" ] && [ -f "$MAIN_FILE" ]; then
                 echo "  Using main from package.json: $MAIN_FILE"
               else
-                # Fallback ke file biasa
                 if [ -f "index.js" ]; then
                   MAIN_FILE="index.js"
                 elif [ -f "app.js" ]; then
@@ -297,7 +319,6 @@ jobs:
               fi
               cd ..
             else
-              # Fallback ke file biasa
               if [ -f "${bot_dir}index.js" ]; then
                 MAIN_FILE="index.js"
               elif [ -f "${bot_dir}app.js" ]; then
@@ -310,7 +331,6 @@ jobs:
             if [ -n "$MAIN_FILE" ]; then
               BOT_COUNT=$((BOT_COUNT + 1))
               
-              # Generate fake data UNIQUE untuk setiap bot
               export ANDROID_ID=$(openssl rand -hex 16)
               export GAID=$(openssl rand -hex 16)
               export FAKE_IMEI="35$(openssl rand -hex 12 | head -c 13)"
@@ -322,7 +342,6 @@ jobs:
               echo "  IMEI: $FAKE_IMEI"
               echo "  MAC: $FAKE_MAC"
               
-              # Baca scripts.start dari package.json jika ada
               if [ -f "${bot_dir}package.json" ]; then
                 cd "$bot_dir"
                 START_SCRIPT=$(node -p "try{require('./package.json').scripts?.start || ''}catch(e){''}" 2>/dev/null)
@@ -351,7 +370,6 @@ jobs:
           echo "PIDs: $PIDS"
           echo ""
           
-          # Jalankan Cloudflare Tunnel
           ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
           TUNNEL_PID=$!
           
@@ -359,22 +377,44 @@ jobs:
           echo ""
           echo "SSH Active on: $(cat ~/ssh_ip.txt 2>/dev/null)"
           echo ""
-          echo "=== Monitoring All Bots ==="
+          echo "=== Monitoring All Bots with Auto Backup Every Hour ==="
           
-          # Monitor semua bot
+          LAST_BACKUP=$(date +%s)
+          
           while true; do
             sleep 60
+            
+            CURRENT_TIME=$(date +%s)
+            TIME_SINCE_BACKUP=$((CURRENT_TIME - LAST_BACKUP))
+            
+            if [ $TIME_SINCE_BACKUP -ge 3600 ]; then
+              echo ""
+              echo "[$(date)] ⏰ Running scheduled backup..."
+              
+              mkdir -p /tmp/backup_$$
+              find . -name "*.db" -o -name "*.sqlite" -o -type d -name "session*" -o -type d -name "sessions" -o -name "*.log" -o -name "*.json" -not -path "./node_modules/*" -not -name "package*.json" 2>/dev/null | xargs -I {} cp --parents {} /tmp/backup_$$/ 2>/dev/null
+              
+              tar -czf /tmp/hourly-backup.tar.gz -C /tmp/backup_$$ . 2>/dev/null
+              
+              if [ -f /tmp/hourly-backup.tar.gz ]; then
+                cp /tmp/hourly-backup.tar.gz ./hourly-backup.tar.gz
+                echo "✅ Hourly backup saved: $(du -h ./hourly-backup.tar.gz | cut -f1)"
+              fi
+              
+              rm -rf /tmp/backup_$$
+              LAST_BACKUP=$CURRENT_TIME
+            fi
             
             ALL_ALIVE=true
             for PID in $PIDS; do
               if ! kill -0 $PID 2>/dev/null; then
-                echo "[WARNING] Bot PID $PID mati!"
+                echo "[WARNING] Bot PID $PID died!"
                 ALL_ALIVE=false
               fi
             done
             
             if ! kill -0 $TUNNEL_PID 2>/dev/null; then
-              echo "Tunnel mati, restarting..."
+              echo "Tunnel died, restarting..."
               ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
               TUNNEL_PID=$!
             fi
@@ -389,7 +429,6 @@ jobs:
               
               NEW_PIDS=""
               for bot_dir in */; do
-                # Detect main file lagi
                 MAIN_FILE=""
                 if [ -f "${bot_dir}package.json" ]; then
                   cd "$bot_dir"
@@ -429,5 +468,141 @@ jobs:
               echo "All bots restarted. New PIDs: $PIDS"
             fi
             
-            echo "[$(date)] Alive: Bots=$(echo $PIDS | wc -w) | Tunnel=$TUNNEL_PID"
+            echo "[$(date)] 🟢 Alive: Bots=$(echo $PIDS | wc -w) | Tunnel=$TUNNEL_PID | Next backup in $((3600 - TIME_SINCE_BACKUP))s"
           done
+          
+      - name: Save ALL Data for Next Workflow
+        if: always()
+        run: |
+          echo ""
+          echo "=== SAVING ALL DATA FOR NEXT WORKFLOW ==="
+          echo ""
+          
+          BACKUP_FILE="bot-data-backup.tar.gz"
+          
+          echo "Collecting data files..."
+          
+          DB_FILES=$(find . -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" 2>/dev/null)
+          SESSION_DIRS=$(find . -type d -name "session*" -o -name "sessions" -o -name "cache" -o -name "storage" -o -name "temp" -o -name "data" 2>/dev/null)
+          JSON_FILES=$(find . -name "*.json" -not -path "./node_modules/*" -not -name "package*.json" -not -name "package-lock.json" 2>/dev/null)
+          LOG_FILES=$(find . -name "*.log" 2>/dev/null)
+          CONFIG_FILES=$(find . -name ".env" -o -name "*.config.js" -o -name "config.json" -o -name "config.yaml" 2>/dev/null)
+          TXT_FILES=$(find . -name "*.txt" -not -path "./node_modules/*" 2>/dev/null)
+          
+          ALL_FILES="$DB_FILES $SESSION_DIRS $JSON_FILES $LOG_FILES $CONFIG_FILES $TXT_FILES"
+          
+          if [ -n "$ALL_FILES" ]; then
+            echo "Found files to backup:"
+            echo "$ALL_FILES" | head -30
+            echo ""
+            
+            tar -czf $BACKUP_FILE $ALL_FILES 2>/dev/null || true
+            
+            if [ -f "$BACKUP_FILE" ]; then
+              BACKUP_SIZE=$(du -h $BACKUP_FILE | cut -f1)
+              FILE_COUNT=$(tar -tzf $BACKUP_FILE 2>/dev/null | wc -l)
+              echo "✅ Backup created successfully!"
+              echo "   File: $BACKUP_FILE"
+              echo "   Size: $BACKUP_SIZE"
+              echo "   Files: $FILE_COUNT"
+            else
+              echo "⚠️ Failed to create backup archive"
+              touch $BACKUP_FILE
+            fi
+          else
+            echo "⚠️ No data files found to backup"
+            touch $BACKUP_FILE
+          fi
+          
+          echo ""
+          echo "=== Saving hourly backup if exists ==="
+          if [ -f "./hourly-backup.tar.gz" ]; then
+            cp ./hourly-backup.tar.gz hourly-backup-${{ github.run_id }}.tar.gz
+            echo "✅ Hourly backup saved"
+          fi
+          
+      - name: Upload to Gist Backup
+        if: always() && secrets.GIST_TOKEN != ''
+        continue-on-error: true
+        run: |
+          echo "=== UPLOADING TO GIST BACKUP ==="
+          
+          GIST_ID="YOUR_GIST_ID_HERE"
+          GIST_TOKEN="${{ secrets.GIST_TOKEN }}"
+          
+          if [ -n "$GIST_TOKEN" ] && [ -n "$GIST_ID" ] && [ -f "bot-data-backup.tar.gz" ]; then
+            BACKUP_BASE64=$(base64 -w 0 bot-data-backup.tar.gz 2>/dev/null)
+            
+            if [ -n "$BACKUP_BASE64" ]; then
+              cat > gist_payload.json << EOF
+              {
+                "files": {
+                  "bot-backup.json": {
+                    "content": "$BACKUP_BASE64"
+                  },
+                  "backup-metadata.json": {
+                    "content": "{\"timestamp\":\"$(date -Iseconds)\",\"run_id\":${{ github.run_id }},\"size\":\"$(du -h bot-data-backup.tar.gz | cut -f1)\",\"workflow\":\"bot-247\"}"
+                  }
+                }
+              }
+              EOF
+              
+              curl -s -X PATCH \
+                -H "Authorization: token $GIST_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d @gist_payload.json \
+                "https://api.github.com/gists/$GIST_ID"
+              
+              echo "✅ Backup uploaded to Gist"
+            fi
+          else
+            echo "⚠️ Gist backup skipped (no token or gist id)"
+          fi
+          
+      - name: Upload Artifact for Next Workflow
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bot-saved-data
+          path: |
+            bot-data-backup.tar.gz
+            hourly-backup-*.tar.gz
+          retention-days: 1
+          overwrite: true
+          
+      - name: Trigger Next Workflow Automatically
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "=== TRIGGERING NEXT WORKFLOW ==="
+          
+          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/bot-247.yml/dispatches" \
+            -d '{"ref":"main"}'
+          
+          echo "✅ Next workflow triggered successfully!"
+          
+      - name: Final Status
+        if: always()
+        run: |
+          echo ""
+          echo "========================================="
+          echo "  WORKFLOW COMPLETED"
+          echo "========================================="
+          echo ""
+          echo "Status: ${{ job.status }}"
+          echo "Data saved for next run: ✅"
+          echo "Next workflow triggered: ✅"
+          echo ""
+          echo "SSH IP: $(cat ~/ssh_ip.txt 2>/dev/null || echo 'N/A')"
+          echo "SSH Pass: $(cat ~/ssh_pass.txt 2>/dev/null || echo 'N/A')"
+          echo ""
+          echo "Backup file:"
+          ls -lh bot-data-backup.tar.gz 2>/dev/null || echo "No backup file"
+          echo ""
