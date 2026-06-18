@@ -18,35 +18,131 @@ jobs:
       - uses: actions/checkout@v4
       
       # ============================================
-      # OPTIMASI NETWORK SPEED MAKSIMAL
+      # AUTO-DETECT STORAGE UNTUK DOWNLOAD/UPLOAD
       # ============================================
-      - name: 🚀 Force Max Network Speed (10-50 Mbps)
+      - name: Auto-Detect Storage untuk Speed Max
         run: |
           echo "=========================================="
-          echo "  🌐 OPTIMASI JARINGAN MAX SPEED  🌐"
+          echo "  💾 AUTO-DETECT STORAGE  💾"
           echo "=========================================="
           
-          # 1. Install tools for speed
+          # Deteksi storage yang tersedia
+          echo "📊 DETEKSI STORAGE:"
+          df -h
+          echo ""
+          
+          # Cari storage terbesar
+          STORAGE_PATH=""
+          STORAGE_SIZE=""
+          STORAGE_USED=""
+          STORAGE_AVAIL=""
+          
+          # Cek storage yang tersedia
+          for mount in $(df -h | awk 'NR>1 {print $6}'); do
+            SIZE=$(df -h "$mount" | awk 'NR==2 {print $2}')
+            AVAIL=$(df -h "$mount" | awk 'NR==2 {print $4}')
+            USED=$(df -h "$mount" | awk 'NR==2 {print $5}')
+            
+            # Ambil storage terbesar
+            if [[ "$SIZE" == *"G"* ]] || [[ "$SIZE" == *"T"* ]]; then
+              NUM_SIZE=$(echo "$SIZE" | sed 's/G//' | sed 's/T//' | sed 's/,/./')
+              if [[ -z "$STORAGE_PATH" ]] || [[ "$NUM_SIZE" -gt "$BEST_SIZE" ]] 2>/dev/null; then
+                STORAGE_PATH="$mount"
+                STORAGE_SIZE="$SIZE"
+                STORAGE_USED="$USED"
+                STORAGE_AVAIL="$AVAIL"
+                BEST_SIZE="$NUM_SIZE"
+              fi
+            fi
+          done
+          
+          # Fallback ke root
+          if [ -z "$STORAGE_PATH" ]; then
+            STORAGE_PATH="/"
+            STORAGE_SIZE=$(df -h / | awk 'NR==2 {print $2}')
+            STORAGE_USED=$(df -h / | awk 'NR==2 {print $5}')
+            STORAGE_AVAIL=$(df -h / | awk 'NR==2 {print $4}')
+          fi
+          
+          # Buat folder storage
+          STORAGE_DIR="/mnt/storage"
+          sudo mkdir -p "$STORAGE_DIR"
+          
+          # Gunakan storage terbesar untuk download/upload
+          sudo mount --bind "$STORAGE_PATH" "$STORAGE_DIR" 2>/dev/null || {
+            echo "⚠️ Gagal mount, menggunakan direktori lokal"
+            STORAGE_DIR="."
+          }
+          
+          # Buat folder untuk download/upload
+          mkdir -p "$STORAGE_DIR/downloads" "$STORAGE_DIR/uploads" "$STORAGE_DIR/cache" "$STORAGE_DIR/data" "$STORAGE_DIR/sessions" "$STORAGE_DIR/users" "$STORAGE_DIR/logs" "$STORAGE_DIR/backup" "$STORAGE_DIR/output" "$STORAGE_DIR/temp"
+          
+          # Set permission
+          chmod -R 777 "$STORAGE_DIR" 2>/dev/null || true
+          
+          # Link ke root
+          ln -sf "$STORAGE_DIR/downloads" ./downloads 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/uploads" ./uploads 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/cache" ./cache 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/data" ./data 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/sessions" ./sessions 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/users" ./users 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/logs" ./logs 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/backup" ./backup 2>/dev/null || true
+          ln -sf "$STORAGE_DIR/output" ./output 2>/dev/null || true
+          
+          # Set environment
+          echo "STORAGE_PATH=$STORAGE_DIR" >> $GITHUB_ENV
+          echo "DOWNLOAD_PATH=$STORAGE_DIR/downloads" >> $GITHUB_ENV
+          echo "UPLOAD_PATH=$STORAGE_DIR/uploads" >> $GITHUB_ENV
+          echo "STORAGE_SIZE=$STORAGE_SIZE" >> $GITHUB_ENV
+          echo "STORAGE_AVAIL=$STORAGE_AVAIL" >> $GITHUB_ENV
+          echo "STORAGE_USED=$STORAGE_USED" >> $GITHUB_ENV
+          
+          # Tampilkan hasil
+          echo ""
+          echo "✅ STORAGE DETECTED:"
+          echo "  Path     : $STORAGE_DIR"
+          echo "  Size     : $STORAGE_SIZE"
+          echo "  Used     : $STORAGE_USED"
+          echo "  Available: $STORAGE_AVAIL"
+          echo ""
+          echo "📁 FOLDER STORAGE:"
+          ls -la "$STORAGE_DIR" 2>/dev/null || echo "  (empty)"
+          echo ""
+          echo "✅ STORAGE AUTO-DETECTED UNTUK DOWNLOAD/UPLOAD!"
+          echo "=========================================="
+
+      # ============================================
+      # OPTIMASI NETWORK + STORAGE UNTUK SPEED MAX
+      # ============================================
+      - name: 🚀 Optimasi Network & Storage untuk Speed Max
+        run: |
+          echo "=========================================="
+          echo "  🌐 OPTIMASI NETWORK + STORAGE  🌐"
+          echo "=========================================="
+          
+          # Install tools
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             speedtest-cli \
-            iperf3 \
             aria2 \
             axel \
             wget \
             curl \
-            mtr \
-            net-tools \
-            dnsutils \
-            bc \
             parallel \
             pigz \
             pbzip2 \
             nethogs \
+            iotop \
             htop \
-            iftop || true
+            screen \
+            tmux \
+            jq \
+            bc \
+            net-tools || true
           
-          # 2. Optimasi TCP untuk kecepatan tinggi
+          # Optimasi TCP
           sudo sysctl -w net.core.rmem_max=134217728 || true
           sudo sysctl -w net.core.wmem_max=134217728 || true
           sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 134217728" || true
@@ -60,304 +156,241 @@ jobs:
           sudo sysctl -w net.ipv4.tcp_sack=1 || true
           sudo sysctl -w net.ipv4.tcp_window_scaling=1 || true
           
-          # 3. DNS cepat
+          # Optimasi I/O untuk storage
+          sudo sysctl -w vm.dirty_ratio=40 || true
+          sudo sysctl -w vm.dirty_background_ratio=10 || true
+          sudo sysctl -w vm.vfs_cache_pressure=50 || true
+          sudo sysctl -w vm.swappiness=10 || true
+          
+          # DNS cepat
           echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf
           echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-          echo "nameserver 9.9.9.9" | sudo tee -a /etc/resolv.conf
           
-          # 4. Test speed (tanpa ping ICMP)
+          # Test speed
           echo ""
-          echo "📊 TESTING SPEED INTERNET:"
+          echo "📊 TESTING SPEED:"
           speedtest-cli --simple 2>/dev/null || echo "⚠️ Speed test tidak tersedia"
           
-          # 5. Tampilkan info jaringan
+          # Tampilkan info
           echo ""
           echo "📡 NETWORK INFO:"
           ip addr show | grep inet
           echo ""
+          curl -s -o /dev/null -w "Google: %{http_code} - %{time_total}s\n" https://www.google.com
+          curl -s -o /dev/null -w "Cloudflare: %{http_code} - %{time_total}s\n" https://1.1.1.1
           
-          # Test koneksi dengan curl (bukan ping)
-          echo "📡 TESTING CONNECTION:"
-          curl -s -o /dev/null -w "Google: %{http_code} - %{time_total}s\n" https://www.google.com || echo "Google: timeout"
-          curl -s -o /dev/null -w "Cloudflare: %{http_code} - %{time_total}s\n" https://1.1.1.1 || echo "Cloudflare: timeout"
-          curl -s -o /dev/null -w "GitHub: %{http_code} - %{time_total}s\n" https://github.com || echo "GitHub: timeout"
+          echo ""
+          echo "✅ OPTIMASI SELESAI!"
+          echo "=========================================="
+
+      # ============================================
+      # DOWNLOAD FILE KE STORAGE (SPEED MAX)
+      # ============================================
+      - name: ⬇️ Download Files ke Storage (Speed Max)
+        run: |
+          echo "=========================================="
+          echo "  ⬇️ DOWNLOAD KE STORAGE  ⬇️"
+          echo "=========================================="
           
-          # 6. Simpan konfigurasi untuk semua bot
-          cat > /tmp/speed_optimize.sh << 'SPEEDSH'
-          #!/bin/bash
-          # Fungsi untuk download cepat
-          function fast_download() {
+          STORAGE_DIR="${{ env.STORAGE_PATH }}"
+          DOWNLOAD_DIR="$STORAGE_DIR/downloads"
+          
+          echo "📁 Download folder: $DOWNLOAD_DIR"
+          ls -la "$DOWNLOAD_DIR" 2>/dev/null || echo "  (empty)"
+          echo ""
+          
+          # Fungsi download dengan speed max
+          download_to_storage() {
             URL="$1"
-            OUTPUT="$2"
+            FILENAME="$2"
+            DEST="$DOWNLOAD_DIR/$FILENAME"
             
-            echo "⬇️ Downloading: $URL"
+            echo "📥 Download: $FILENAME -> Storage"
             
-            # Coba dengan aria2 (multi-thread)
+            # Gunakan aria2 (paling cepat)
             if command -v aria2c &> /dev/null; then
               aria2c -x 16 -s 16 -k 1M \
                 --max-download-limit=0 \
                 --console-log-level=error \
-                -o "$OUTPUT" "$URL" 2>/dev/null
-              return $?
+                -o "$DEST" "$URL" &
+            else
+              # Fallback wget
+              wget --limit-rate=50M -O "$DEST" "$URL" &
             fi
             
-            # Fallback ke axel
-            if command -v axel &> /dev/null; then
-              axel -n 16 -a -o "$OUTPUT" "$URL"
-              return $?
-            fi
+            PID=$!
+            while kill -0 $PID 2>/dev/null; do
+              echo -n "."
+              sleep 3
+            done
+            echo " ✅ Selesai!"
             
-            # Fallback ke wget
-            wget --limit-rate=50M -O "$OUTPUT" "$URL"
-          }
-          
-          # Fungsi untuk upload cepat
-          function fast_upload() {
-            FILE="$1"
-            URL="$2"
-            
-            echo "⬆️ Uploading: $FILE"
-            curl -X POST --limit-rate 50M -F "file=@$FILE" "$URL"
-          }
-          
-          # Export fungsi
-          export -f fast_download
-          export -f fast_upload
-          SPEEDSH
-          
-          chmod +x /tmp/speed_optimize.sh
-          source /tmp/speed_optimize.sh
-          
-          echo ""
-          echo "✅ OPTIMASI SELESAI! Download/Upload siap 50 Mbps"
-          echo "=========================================="
-      
-      # ============================================
-      # DOWNLOAD FILE DENGAN KECEPATAN MAKSIMAL
-      # ============================================
-      - name: ⬇️ Download Files Speed Max
-        run: |
-          echo "=== DOWNLOAD SPEED MAX ==="
-          
-          # Buat folder download
-          mkdir -p downloads
-          
-          # Download dengan multi-thread
-          download_file() {
-            URL="$1"
-            FILENAME="$2"
-            
-            echo "📥 Downloading: $FILENAME"
-            
-            # Metode 1: Aria2 (paling cepat)
-            aria2c -x 16 -s 16 -k 1M \
-              --max-download-limit=0 \
-              --console-log-level=error \
-              -o "downloads/$FILENAME" "$URL" &
-            
-            # Metode 2: Axel
-            # axel -n 16 -a -o "downloads/$FILENAME" "$URL" &
+            # Tampilkan hasil
+            ls -lh "$DEST" 2>/dev/null || echo "File: $FILENAME"
           }
           
           # ========== CONTOH DOWNLOAD ==========
-          # Ganti URL berikut dengan file yang ingin didownload
+          # Ganti URL sesuai kebutuhan
+          # download_to_storage "https://example.com/file.zip" "file.zip"
           
-          # Download semua file yang ada di repository
-          for file in *.zip *.rar *.7z *.tar.gz; do
-            if [ -f "$file" ]; then
-              echo "📦 Found: $file"
-            fi
-          done
-          
-          echo ""
-          echo "✅ Semua download selesai"
-          echo "Speed target: 10-50 Mbps"
-      
-      # ============================================
-      # UPLOAD FILE DENGAN KECEPATAN MAKSIMAL
-      # ============================================
-      - name: ⬆️ Upload Files Speed Max
-        run: |
-          echo "=== UPLOAD SPEED MAX ==="
-          
-          upload_file() {
-            FILE="$1"
-            TARGET_URL="$2"
-            
-            echo "📤 Uploading: $FILE"
-            
-            # Upload dengan curl (limit 50Mbps)
-            curl -X POST \
-              --limit-rate 50M \
-              -F "file=@$FILE" \
-              "$TARGET_URL" &
-          }
-          
-          # ========== CONTOH UPLOAD ==========
-          # Ganti dengan URL tujuan upload
-          
-          # Upload semua file .zip
-          for file in *.zip; do
-            if [ -f "$file" ]; then
-              echo "📤 Found ZIP: $file"
-              # upload_file "$file" "https://tujuan.com/upload"
-            fi
-          done
-          
-          echo ""
-          echo "✅ Semua upload selesai"
-      
-      # ============================================
-      # RESTORE BACKUP DARI WORKFLOW SEBELUMNYA
-      # ============================================
-      - name: Restore Backup dari Workflow Sebelumnya
-        uses: actions/download-artifact@v4
-        with:
-          pattern: bot-backup-*
-          path: /tmp/restore_backup
-          merge-multiple: true
-        continue-on-error: true
-
-      - name: Extract dan Restore SEMUA Data (Multi-thread)
-        run: |
-          echo "=== RESTORE SEMUA DATA DENGAN SPEED MAX ==="
-          
-          if [ -d "/tmp/restore_backup" ] && [ "$(ls -A /tmp/restore_backup)" ]; then
-            echo "✅ Backup ditemukan, merestore SEMUA data..."
-            
-            # Extract semua zip dengan parallel
-            find /tmp/restore_backup -name "*.zip" -type f 2>/dev/null | \
-              parallel -j 4 "unzip -o {} -d /tmp/restore_backup/" 2>/dev/null || true
-            
-            # Extract tar dengan pigz (multi-thread)
-            find /tmp/restore_backup -name "*.tar.gz" -type f 2>/dev/null | \
-              parallel -j 4 "tar -xzf {} -C /tmp/restore_backup/" 2>/dev/null || true
-            
-            # Extract tar dengan pbzip2
-            find /tmp/restore_backup -name "*.tar.bz2" -type f 2>/dev/null | \
-              parallel -j 4 "tar -xjf {} -C /tmp/restore_backup/" 2>/dev/null || true
-            
-            # 1. Restore SEMUA folder bot
-            for bot_dir in /tmp/restore_backup/bot_*/; do
-              if [ -d "$bot_dir" ]; then
-                BOT_NAME=$(basename "$bot_dir")
-                echo "📂 Restoring bot: $BOT_NAME"
-                mkdir -p "$BOT_NAME"
-                cp -r "$bot_dir"/* "$BOT_NAME"/ 2>/dev/null || true
-              fi
+          # Download semua dari file list
+          if [ -f "download_list.txt" ]; then
+            echo "📥 Download dari list:"
+            cat download_list.txt | while read URL FILENAME; do
+              download_to_storage "$URL" "$FILENAME"
             done
-            
-            # 2. Restore SEMUA folder (termasuk folder custom)
-            for folder in /tmp/restore_backup/*/; do
-              if [ -d "$folder" ]; then
-                FOLDER_NAME=$(basename "$folder")
-                # Skip folder yang sudah diproses
-                if [[ "$FOLDER_NAME" != "bot_"* ]] && [[ "$FOLDER_NAME" != "backup_"* ]] && [[ "$FOLDER_NAME" != "."* ]]; then
-                  echo "📁 Restoring folder: $FOLDER_NAME/"
-                  mkdir -p "$FOLDER_NAME"
-                  cp -r "$folder"/* "$FOLDER_NAME"/ 2>/dev/null || true
-                fi
-              fi
-            done
-            
-            # 3. Restore SEMUA file di root (di luar folder)
-            echo "📄 Restoring files in root directory..."
-            for file in /tmp/restore_backup/*; do
-              if [ -f "$file" ]; then
-                FILENAME=$(basename "$file")
-                # Skip file yang sudah diproses
-                if [[ "$FILENAME" != "backup_"* ]] && [[ "$FILENAME" != "."* ]]; then
-                  echo "  ✅ $FILENAME"
-                  cp "$file" "./" 2>/dev/null || true
-                fi
-              fi
-            done
-            
-            # 4. Restore file JSON (data user, session, dll)
-            echo "📄 Restoring JSON files..."
-            for json_file in /tmp/restore_backup/*.json; do
-              if [ -f "$json_file" ]; then
-                cp "$json_file" "./" 2>/dev/null || true
-                echo "  ✅ $(basename "$json_file")"
-              fi
-            done
-            
-            # 5. Restore database files
-            echo "🗄️ Restoring database files..."
-            for db_file in /tmp/restore_backup/*.db /tmp/restore_backup/*.sqlite /tmp/restore_backup/*.sql; do
-              if [ -f "$db_file" ]; then
-                cp "$db_file" "./" 2>/dev/null || true
-                echo "  ✅ $(basename "$db_file")"
-              fi
-            done
-            
-            # 6. Restore config files
-            echo "⚙️ Restoring config files..."
-            for config_file in /tmp/restore_backup/*.env /tmp/restore_backup/*.config /tmp/restore_backup/*.yml /tmp/restore_backup/*.yaml; do
-              if [ -f "$config_file" ]; then
-                cp "$config_file" "./" 2>/dev/null || true
-                echo "  ✅ $(basename "$config_file")"
-              fi
-            done
-            
-            # 7. Restore semua file penting lainnya
-            echo "📄 Restoring other important files..."
-            for file in /tmp/restore_backup/*.js /tmp/restore_backup/*.txt /tmp/restore_backup/*.md /tmp/restore_backup/*.sh; do
-              if [ -f "$file" ]; then
-                FILENAME=$(basename "$file")
-                # Skip file yang sudah diproses
-                if [[ "$FILENAME" != "fake-device.js" ]] && [[ "$FILENAME" != "bot_system"* ]]; then
-                  cp "$file" "./" 2>/dev/null || true
-                  echo "  ✅ $FILENAME"
-                fi
-              fi
-            done
-            
-            # 8. Restore fake-device.js
-            if [ -f "/tmp/restore_backup/fake-device.js" ]; then
-              cp "/tmp/restore_backup/fake-device.js" ./
-              echo "  ✅ fake-device.js"
-            fi
-            
-            # 9. Restore backup_info
-            if [ -f "/tmp/restore_backup/backup_info.txt" ]; then
-              cp "/tmp/restore_backup/backup_info.txt" ./
-              echo "  ✅ backup_info.txt"
-            fi
-            
-            echo "✅ RESTORE SEMUA DATA SELESAI"
-          else
-            echo "ℹ️ Tidak ada backup sebelumnya, memulai fresh"
           fi
           
           echo ""
-          echo "=== ISI DIREKTORI SETELAH RESTORE ==="
-          ls -la
-          echo ""
-          echo "=== ISI FOLDER BOT ==="
-          for dir in */; do
-            if [ -d "$dir" ] && [[ "$dir" != backup_* ]] && [[ "$dir" != .* ]]; then
-              echo "📁 $dir"
-              ls -la "$dir" | head -20
-              echo ""
-            fi
-          done
+          echo "✅ DOWNLOAD KE STORAGE SELESAI!"
+          echo "📊 Storage usage:"
+          df -h "$STORAGE_DIR"
+          echo "=========================================="
 
       # ============================================
-      # SETUP STORAGE & FAKE VPS (TETAP SAMA)
+      # UPLOAD FILE DARI STORAGE (SPEED MAX)
       # ============================================
-      - name: Setup Large Storage & Fake VPS Specs
+      - name: ⬆️ Upload File dari Storage (Speed Max)
         run: |
-          # Fake CPU specs - 3.7 GHz
+          echo "=========================================="
+          echo "  ⬆️ UPLOAD DARI STORAGE  ⬆️"
+          echo "=========================================="
+          
+          STORAGE_DIR="${{ env.STORAGE_PATH }}"
+          UPLOAD_DIR="$STORAGE_DIR/uploads"
+          
+          echo "📁 Upload folder: $UPLOAD_DIR"
+          ls -la "$UPLOAD_DIR" 2>/dev/null || echo "  (empty)"
+          echo ""
+          
+          # Fungsi upload dari storage
+          upload_from_storage() {
+            FILENAME="$1"
+            TARGET_URL="$2"
+            FILE_PATH="$UPLOAD_DIR/$FILENAME"
+            
+            if [ ! -f "$FILE_PATH" ]; then
+              echo "⚠️ File tidak ditemukan: $FILENAME"
+              return 1
+            fi
+            
+            echo "📤 Upload: $FILENAME dari Storage"
+            
+            # Upload dengan curl
+            curl -X POST \
+              --limit-rate 50M \
+              -F "file=@$FILE_PATH" \
+              "$TARGET_URL" &
+            
+            PID=$!
+            while kill -0 $PID 2>/dev/null; do
+              echo -n "."
+              sleep 3
+            done
+            echo " ✅ Upload selesai!"
+          }
+          
+          # Upload semua file di storage
+          upload_all_from_storage() {
+            echo "📤 Upload semua file dari storage..."
+            
+            for file in "$UPLOAD_DIR"/*; do
+              if [ -f "$file" ]; then
+                FILENAME=$(basename "$file")
+                echo "📤 Uploading: $FILENAME"
+                # upload_from_storage "$FILENAME" "https://tujuan.com/upload"
+              fi
+            done
+          }
+          
+          # ========== CONTOH UPLOAD ==========
+          # Ganti URL tujuan upload
+          # upload_from_storage "file.zip" "https://tujuan.com/upload"
+          
+          echo ""
+          echo "✅ UPLOAD DARI STORAGE SELESAI!"
+          echo "📊 Storage usage:"
+          df -h "$STORAGE_DIR"
+          echo "=========================================="
+
+      # ============================================
+      # MONITOR STORAGE AUTO-RESTART JIKA PENUH
+      # ============================================
+      - name: Monitor Storage - Auto Restart if Full
+        run: |
+          echo "=========================================="
+          echo "  📊 MONITOR STORAGE  📊"
+          echo "=========================================="
+          
+          STORAGE_DIR="${{ env.STORAGE_PATH }}"
+          THRESHOLD=95
+          
+          # Cek storage
+          check_storage() {
+            if [ -d "$STORAGE_DIR" ]; then
+              USAGE=$(df "$STORAGE_DIR" | awk 'NR==2 {print $5}' | sed 's/%//')
+              TOTAL=$(df -h "$STORAGE_DIR" | awk 'NR==2 {print $2}')
+              USED=$(df -h "$STORAGE_DIR" | awk 'NR==2 {print $3}')
+              AVAIL=$(df -h "$STORAGE_DIR" | awk 'NR==2 {print $4}')
+            else
+              USAGE=$(df . | awk 'NR==2 {print $5}' | sed 's/%//')
+              TOTAL=$(df -h . | awk 'NR==2 {print $2}')
+              USED=$(df -h . | awk 'NR==2 {print $3}')
+              AVAIL=$(df -h . | awk 'NR==2 {print $4}')
+            fi
+            
+            echo "📊 STORAGE STATUS:"
+            echo "  Total   : $TOTAL"
+            echo "  Used    : $USED ($USAGE%)"
+            echo "  Available: $AVAIL"
+            echo "  Threshold: $THRESHOLD%"
+            
+            if [ "$USAGE" -ge "$THRESHOLD" ]; then
+              echo ""
+              echo "=========================================="
+              echo "  ⚠️ STORAGE PENUH! $USAGE% >= $THRESHOLD%"
+              echo "  🔄 AUTO-RESTART TRIGGERED!"
+              echo "=========================================="
+              return 1
+            else
+              echo "✅ Storage aman: $USAGE% < $THRESHOLD%"
+              return 0
+            fi
+          }
+          
+          check_storage
+          
+          # Jika storage penuh, trigger restart
+          if [ $? -eq 1 ]; then
+            echo "🔄 Triggering restart workflow..."
+            
+            # Backup dulu
+            echo "📦 Creating backup before restart..."
+            BACKUP_DIR="$STORAGE_DIR/backup/backup_$(date +%Y%m%d_%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            cp -r ./* "$BACKUP_DIR/" 2>/dev/null || true
+            
+            # Trigger workflow baru
+            curl -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/dispatches \
+              -d '{"ref":"${{ github.ref_name }}"}'
+            
+            echo "✅ New workflow triggered!"
+            exit 1
+          fi
+          
+          echo "=========================================="
+
+      # ============================================
+      # SETUP FAKE VPS
+      # ============================================
+      - name: Setup Fake VPS Specs
+        run: |
           echo "=== FAKE VPS SPECS ==="
-          echo "CPU Model: AMD EPYC 7763 64-Core Processor (Fake)"
-          echo "CPU Speed: 3.7 GHz (Fake)"
-          echo "VPS Type: AWS EC2 c6a.metal (Fake)"
           
-          # Modify /proc/cpuinfo (fake)
-          sudo mount -o remount,rw /proc 2>/dev/null || true
-          
-          # Create fake cpuinfo
+          # Fake CPU
           cat > /tmp/fake_cpuinfo << 'EOF'
           processor       : 0
           vendor_id       : GenuineIntel
@@ -387,113 +420,49 @@ jobs:
           power management:
           EOF
           
-          # Mount fake cpuinfo
           sudo mount --bind /tmp/fake_cpuinfo /proc/cpuinfo 2>/dev/null || true
           
-          # Set environment variables for fake specs
-          echo "FAKE_CPU_MODEL=Intel Xeon Platinum 8380 @ 3.70GHz" >> $GITHUB_ENV
-          echo "FAKE_CPU_SPEED=3700" >> $GITHUB_ENV
-          echo "FAKE_VPS_TYPE=AWS EC2 c6a.metal - 128 vCPUs" >> $GITHUB_ENV
-          echo "FAKE_RAM=256GB DDR5 ECC" >> $GITHUB_ENV
-          echo "FAKE_STORAGE=NVMe SSD 4TB" >> $GITHUB_ENV
-          
-          # Show fake specs
+          # Tampilkan specs
           echo ""
           echo "=========================================="
-          echo "  🚀 VPS SPESIFIKASI TERBAIK DUNIA 🚀"
+          echo "  🚀 VPS SPESIFIKASI  🚀"
           echo "=========================================="
           echo "CPU Model    : Intel Xeon Platinum 8380"
           echo "CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"
           echo "CPU Cores    : 128 Core / 256 Threads"
           echo "RAM          : 256 GB DDR5 ECC"
-          echo "Storage      : 4 TB NVMe SSD"
+          echo "Storage      : ${{ env.STORAGE_SIZE }}"
+          echo "Storage Used : ${{ env.STORAGE_USED }}"
+          echo "Storage Avail: ${{ env.STORAGE_AVAIL }}"
           echo "VPS Type     : AWS EC2 c6a.metal"
           echo "Network      : 100 Gbps"
           echo "=========================================="
           echo ""
-          
-          # Setup swap dan storage
-          sudo swapoff -a 2>/dev/null || true
-          sudo rm -f /swapfile /swapfile2 2>/dev/null || true
-          sudo dd if=/dev/zero of=/swapfile bs=1M count=500 status=progress
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          sudo dd if=/dev/zero of=/swapfile2 bs=1M count=500 status=progress
-          sudo chmod 600 /swapfile2
-          sudo mkswap /swapfile2
-          sudo swapon /swapfile2
-          sudo sysctl vm.swappiness=5 || true
-          sudo sysctl vm.vfs_cache_pressure=30 || true
-          sudo sysctl vm.dirty_ratio=15 || true
-          sudo sysctl vm.dirty_background_ratio=5 || true
-          sudo docker system prune -af 2>/dev/null || true
-          sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
-          sudo mkdir -p /mnt/extrastorage
-          sudo mount -t tmpfs -o size=8G tmpfs /mnt/extrastorage || true
-          echo "=== Storage Configuration ==="
-          df -h
-          free -h
-          
-          # Show fake lscpu
-          echo ""
-          echo "=== FAKE lscpu OUTPUT ==="
-          cat << 'EOF'
-          Architecture:            x86_64
-          CPU op-mode(s):          32-bit, 64-bit
-          Address sizes:           46 bits physical, 48 bits virtual
-          Byte Order:              Little Endian
-          CPU(s):                  128
-          On-line CPU(s) list:     0-127
-          Vendor ID:               GenuineIntel
-          Model name:              Intel(R) Xeon(R) Platinum 8380 CPU @ 3.70GHz
-          CPU family:              6
-          Model:                   85
-          Thread(s) per core:      2
-          Core(s) per socket:      64
-          Socket(s):               2
-          Stepping:                7
-          CPU max MHz:             3700.0000
-          CPU min MHz:             1200.0000
-          BogoMIPS:                7400.00
-          Virtualization:          VT-x
-          L1d cache:               3.2 MiB
-          L1i cache:               3.2 MiB
-          L2 cache:                128 MiB
-          L3 cache:                256 MiB
-          NUMA node(s):            2
-          NUMA node0 CPU(s):       0-63
-          NUMA node1 CPU(s):       64-127
-          EOF
-          
+
       - name: Setup SSH Server
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq openssh-server net-tools curl jq zip unzip tree || true
           sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/^#Port 22/Port 22/' /etc/ssh/sshd_config
           sudo systemctl restart ssh 2>/dev/null || sudo service ssh restart 2>/dev/null
-          
-      - name: Display SSH Access Info with VPS Specs
+
+      - name: Display SSH Access Info
         run: |
           PUBLIC_IP=$(curl -s https://api.ipify.org)
           ROOT_PASSWORD=$(openssl rand -base64 32 | head -c 20)
           echo "root:$ROOT_PASSWORD" | sudo chpasswd
           echo ""
           echo "=========================================="
-          echo "  🖥️  VPS TERBAIK DUNIA - SSH ACTIVE  🖥️"
+          echo "  🖥️  VPS TERBAIK - SSH ACTIVE  🖥️"
           echo "=========================================="
           echo ""
-          echo "📊 SPESIFIKASI VPS:"
-          echo "  CPU Model    : Intel Xeon Platinum 8380"
-          echo "  CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"
-          echo "  CPU Cores    : 128 Core / 256 Threads"
-          echo "  RAM          : 256 GB DDR5 ECC"
-          echo "  Storage      : 4 TB NVMe SSD (RAID 10)"
-          echo "  Network      : 100 Gbps"
-          echo "  VPS Type     : AWS EC2 c6a.metal"
-          echo "  Location     : AWS Global (Multiple Regions)"
+          echo "📊 SPESIFIKASI:"
+          echo "  CPU    : Intel Xeon Platinum 8380 @ 3.7GHz"
+          echo "  Cores  : 128 Core / 256 Threads"
+          echo "  RAM    : 256 GB DDR5 ECC"
+          echo "  Storage : ${{ env.STORAGE_SIZE }} (${{ env.STORAGE_AVAIL }} available)"
+          echo "  Network : 100 Gbps"
           echo ""
           echo "🔑 SSH ACCESS:"
           echo "  IP Address   : $PUBLIC_IP"
@@ -507,65 +476,36 @@ jobs:
           echo ""
           echo "$PUBLIC_IP" > ~/ssh_ip.txt
           echo "$ROOT_PASSWORD" > ~/ssh_pass.txt
-          
-      - name: Unzip ALL Files
-        run: |
-          for zipfile in *.zip; do
-            if [ -f "$zipfile" ]; then
-              folder_name="${zipfile%.zip}"
-              echo "Extracting $zipfile to $folder_name/"
-              mkdir -p "$folder_name"
-              unzip -o "$zipfile" -d "$folder_name"
-              rm -f "$zipfile"
-            fi
-          done 2>/dev/null || true
-          
-          echo ""
-          echo "=== All bots extracted ==="
-          ls -la */
-          
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
-      - name: Install ALL Dependencies
+
+      - name: Install Dependencies
         run: |
-          echo "=== Installing dependencies ==="
+          echo "=== INSTALL DEPENDENCIES ==="
           npm install -g pm2
           
           for bot_dir in */; do
             if [ -f "${bot_dir}package.json" ]; then
-              echo ">>> Found package.json in: ${bot_dir}"
+              echo "📦 Installing: ${bot_dir}"
               cd "$bot_dir"
-              npm install --no-audit --no-fund || {
-                npm install --legacy-peer-deps --no-audit --no-fund || true
-              }
-              cd ..
-            elif [ -f "${bot_dir}index.js" ] || [ -f "${bot_dir}app.js" ] || [ -f "${bot_dir}main.js" ]; then
-              echo ">>> No package.json in ${bot_dir}, installing common deps"
-              cd "$bot_dir"
-              npm init -y
-              npm install express axios cheerio puppeteer puppeteer-extra puppeteer-extra-plugin-stealth --no-audit --no-fund || true
-              npm install socket.io ws discord.js telegraf node-fetch --no-audit --no-fund || true
-              npm install request got superagent --no-audit --no-fund || true
-              npm install moment chalk colors figlet --no-audit --no-fund || true
-              npm install dotenv config winston --no-audit --no-fund || true
-              npm install fs-extra path os child_process --no-audit --no-fund || true
-              npm install crypto crypto-js jsonwebtoken bcrypt --no-audit --no-fund || true
-              npm install qrcode sharp jimp --no-audit --no-fund || true
-              npm install mongoose mysql2 sqlite3 redis --no-audit --no-fund || true
-              npm install compression helmet cors body-parser --no-audit --no-fund || true
+              npm install --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund || true
               cd ..
             fi
           done
-          
-      - name: Create Complete Bot System - Backup at 6 Hours Exactly
+
+      # ============================================
+      # BOT SYSTEM DENGAN STORAGE AUTO-DETECT
+      # ============================================
+      - name: Create Bot System with Auto-Detect Storage
         run: |
           cat > bot_system.sh << 'BOTSYSTEM'
           #!/bin/bash
           
-          # Configuration - 6 JAM PAS = 21600 detik
-          RESTART_INTERVAL=21600  # 6 jam tepat dalam detik
+          # Configuration
+          RESTART_INTERVAL=21600  # 6 jam
+          STORAGE_THRESHOLD=95    # 95% restart otomatis
           
           # Colors
           RED='\033[0;31m'
@@ -577,38 +517,99 @@ jobs:
           NC='\033[0m'
           
           echo -e "${PURPLE}========================================${NC}"
-          echo -e "${CYAN}  🚀 VPS TERBAIK DUNIA - 3.7 GHz 🚀${NC}"
+          echo -e "${CYAN}  🚀 BOT SYSTEM - STORAGE AUTO-DETECT 🚀${NC}"
           echo -e "${PURPLE}========================================${NC}"
-          echo "CPU: Intel Xeon Platinum 8380 @ 3.70GHz"
-          echo "Cores: 128 Core / 256 Threads"
-          echo "RAM: 256 GB DDR5 ECC"
-          echo "Storage: 4 TB NVMe SSD"
-          echo ""
-          echo -e "${BLUE}=== MULTI BOT SYSTEM 24/7 ===${NC}"
-          echo "Workflow Lifetime: 6 JAM PAS"
-          echo "Backup: HANYA 1 KALI di 6 JAM"
-          echo "Backup: SEMUA FILE (di dalam & di luar folder)"
-          echo "Start time: $(date)"
-          echo ""
+          
+          # Auto-detect storage
+          detect_storage() {
+            echo "📊 Auto-detect storage..."
+            
+            # Cari storage terbesar
+            STORAGE_PATH=""
+            BEST_SIZE=0
+            
+            for mount in $(df -h | awk 'NR>1 {print $6}'); do
+              SIZE=$(df -h "$mount" | awk 'NR==2 {print $2}')
+              if [[ "$SIZE" == *"G"* ]] || [[ "$SIZE" == *"T"* ]]; then
+                NUM_SIZE=$(echo "$SIZE" | sed 's/G//' | sed 's/T//' | sed 's/,/./' | cut -d. -f1)
+                if [ -z "$NUM_SIZE" ]; then continue; fi
+                if [ "$NUM_SIZE" -gt "$BEST_SIZE" ] 2>/dev/null; then
+                  STORAGE_PATH="$mount"
+                  BEST_SIZE="$NUM_SIZE"
+                  STORAGE_SIZE="$SIZE"
+                fi
+              fi
+            done
+            
+            # Fallback ke root
+            if [ -z "$STORAGE_PATH" ]; then
+              STORAGE_PATH="/"
+              STORAGE_SIZE=$(df -h / | awk 'NR==2 {print $2}')
+            fi
+            
+            STORAGE_USED=$(df -h "$STORAGE_PATH" | awk 'NR==2 {print $5}')
+            STORAGE_AVAIL=$(df -h "$STORAGE_PATH" | awk 'NR==2 {print $4}')
+            
+            echo "  Storage Path: $STORAGE_PATH"
+            echo "  Size: $STORAGE_SIZE"
+            echo "  Used: $STORAGE_USED"
+            echo "  Available: $STORAGE_AVAIL"
+            
+            export STORAGE_PATH
+            export STORAGE_SIZE
+            export STORAGE_USED
+            export STORAGE_AVAIL
+          }
+          
+          detect_storage
           
           # ============================================
-          # CREATE FAKE DEVICE MODULE
+          # FUNCTION CHECK STORAGE
+          # ============================================
+          check_storage() {
+            echo -e "${BLUE}[$(date)] Checking storage...${NC}"
+            
+            if [ -d "$STORAGE_PATH" ]; then
+              USAGE=$(df "$STORAGE_PATH" | awk 'NR==2 {print $5}' | sed 's/%//')
+              TOTAL=$(df -h "$STORAGE_PATH" | awk 'NR==2 {print $2}')
+              USED=$(df -h "$STORAGE_PATH" | awk 'NR==2 {print $3}')
+              AVAIL=$(df -h "$STORAGE_PATH" | awk 'NR==2 {print $4}')
+            else
+              USAGE=$(df . | awk 'NR==2 {print $5}' | sed 's/%//')
+              TOTAL=$(df -h . | awk 'NR==2 {print $2}')
+              USED=$(df -h . | awk 'NR==2 {print $3}')
+              AVAIL=$(df -h . | awk 'NR==2 {print $4}')
+            fi
+            
+            echo "  Total   : $TOTAL"
+            echo "  Used    : $USED ($USAGE%)"
+            echo "  Available: $AVAIL"
+            echo "  Threshold: $STORAGE_THRESHOLD%"
+            
+            if [ "$USAGE" -ge "$STORAGE_THRESHOLD" ]; then
+              echo -e "${RED}⚠️ STORAGE PENUH! $USAGE% >= $STORAGE_THRESHOLD%${NC}"
+              echo -e "${YELLOW}🔄 AUTO-RESTART TRIGGERED!${NC}"
+              return 1
+            else
+              echo -e "${GREEN}✅ Storage aman: $USAGE% < $STORAGE_THRESHOLD%${NC}"
+              return 0
+            fi
+          }
+          
+          # ============================================
+          # CREATE FAKE DEVICE
           # ============================================
           cat > fake-device.js << 'FAKEJS'
-          const os = require('os');
-          const fs = require('fs');
-          const path = require('path');
-          
           module.exports = {
             getDeviceInfo: () => ({
-              model: process.env.BUILD_MODEL || "SM-S918B",
-              manufacturer: process.env.BUILD_MANUFACTURER || "samsung",
-              androidVersion: process.env.BUILD_VERSION_RELEASE || "14",
+              model: "SM-S918B",
+              manufacturer: "samsung",
+              androidVersion: "14",
               vpsModel: "Intel Xeon Platinum 8380",
               vpsSpeed: "3.70 GHz",
               vpsCores: 128,
               vpsRAM: "256 GB",
-              vpsStorage: "4 TB NVMe SSD"
+              vpsStorage: process.env.STORAGE_SIZE || "Auto-Detect"
             }),
             getVPSInfo: () => ({
               cpu: "Intel(R) Xeon(R) Platinum 8380 CPU @ 3.70GHz",
@@ -616,290 +617,39 @@ jobs:
               cores: 128,
               threads: 256,
               ram: "256 GB DDR5 ECC",
-              storage: "4 TB NVMe SSD (RAID 10)",
+              storage: process.env.STORAGE_SIZE || "Auto-Detect",
               network: "100 Gbps",
               type: "AWS EC2 c6a.metal"
             }),
-            getIMEI: () => process.env.FAKE_IMEI || "35" + Math.random().toString(36).substring(2, 15),
-            getMAC: () => process.env.FAKE_MAC || "02:" + Array(5).fill().map(() => Math.random().toString(16).slice(-2)).join(":"),
-            getLocation: () => ({
-              latitude: parseFloat(process.env.FAKE_LATITUDE) || -6.2 + Math.random() * 5,
-              longitude: parseFloat(process.env.FAKE_LONGITUDE) || 106.8 + Math.random() * 5
-            }),
+            getIMEI: () => "35" + Math.random().toString(36).substring(2, 15),
+            getMAC: () => "02:" + Array(5).fill().map(() => Math.random().toString(16).slice(-2)).join(":"),
             getUserAgent: () => {
               const uas = [
                 "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 Chrome/120.0.6099.210 Mobile Safari/537.36",
-                "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/119.0.6045.163 Mobile Safari/537.36",
-                "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/121.0.6167.164 Mobile Safari/537.36"
+                "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/119.0.6045.163 Mobile Safari/537.36"
               ];
               return uas[Math.floor(Math.random() * uas.length)];
-            },
-            getAllFakeData: () => ({
-              device: module.exports.getDeviceInfo(),
-              vps: module.exports.getVPSInfo(),
-              imei: module.exports.getIMEI(),
-              mac: module.exports.getMAC(),
-              location: module.exports.getLocation(),
-              userAgent: module.exports.getUserAgent(),
-              timestamp: Date.now()
-            })
+            }
           };
           FAKEJS
           
           # ============================================
-          # FUNCTION BACKUP SEMUA FILE
+          # FUNCTION START BOTS
           # ============================================
-          backup_all_files() {
-            echo -e "${YELLOW}[$(date)] Creating BACKUP SEMUA FILE...${NC}"
-            
-            BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
-            mkdir -p "$BACKUP_DIR"
-            
-            echo "📦 Backup semua file di dalam dan di luar folder..."
-            
-            # ==========================================
-            # 1. BACKUP SEMUA FOLDER (TERMASUK BOT)
-            # ==========================================
-            for folder in */; do
-              if [ -d "$folder" ] && [[ "$folder" != backup_* ]] && [[ "$folder" != .* ]]; then
-                FOLDER_NAME="${folder%/}"
-                echo "  📁 Backup folder: $FOLDER_NAME/"
-                mkdir -p "$BACKUP_DIR/$FOLDER_NAME"
-                
-                # Backup semua isi folder KECUALI node_modules
-                for item in "$FOLDER_NAME"/*; do
-                  if [ -f "$item" ]; then
-                    filename=$(basename "$item")
-                    # Skip node_modules
-                    if [[ "$filename" != "node_modules" ]]; then
-                      cp "$item" "$BACKUP_DIR/$FOLDER_NAME/" 2>/dev/null || true
-                      echo "    ✅ $filename"
-                    fi
-                  elif [ -d "$item" ]; then
-                    dirname=$(basename "$item")
-                    if [[ "$dirname" != "node_modules" ]]; then
-                      mkdir -p "$BACKUP_DIR/$FOLDER_NAME/$dirname"
-                      cp -r "$item"/* "$BACKUP_DIR/$FOLDER_NAME/$dirname/" 2>/dev/null || true
-                      echo "    ✅ $dirname/ (folder)"
-                    fi
-                  fi
-                done
-              fi
-            done
-            
-            # ==========================================
-            # 2. BACKUP SEMUA FILE DI ROOT (DI LUAR FOLDER)
-            # ==========================================
-            echo ""
-            echo "  📄 Backup file di root directory..."
-            for file in *; do
-              if [ -f "$file" ]; then
-                # Skip file backup dan file system
-                if [[ "$file" != backup_* ]] && [[ "$file" != "bot_system.sh" ]] && [[ "$file" != "cloudflared" ]]; then
-                  cp "$file" "$BACKUP_DIR/" 2>/dev/null || true
-                  echo "    ✅ $file"
-                fi
-              fi
-            done
-            
-            # ==========================================
-            # 3. BACKUP SEMUA FILE JSON
-            # ==========================================
-            echo ""
-            echo "  📄 Backup JSON files..."
-            find . -maxdepth 1 -name "*.json" -type f 2>/dev/null | while read jsonfile; do
-              filename=$(basename "$jsonfile")
-              if [[ "$filename" != backup_* ]]; then
-                cp "$jsonfile" "$BACKUP_DIR/" 2>/dev/null || true
-                echo "    ✅ $filename"
-              fi
-            done
-            
-            # ==========================================
-            # 4. BACKUP SEMUA DATABASE
-            # ==========================================
-            echo ""
-            echo "  🗄️ Backup database files..."
-            for ext in .db .sqlite .sql; do
-              find . -maxdepth 1 -name "*$ext" -type f 2>/dev/null | while read dbfile; do
-                filename=$(basename "$dbfile")
-                if [[ "$filename" != backup_* ]]; then
-                  cp "$dbfile" "$BACKUP_DIR/" 2>/dev/null || true
-                  echo "    ✅ $filename"
-                fi
-              done
-            done
-            
-            # ==========================================
-            # 5. BACKUP SEMUA FILE KONFIGURASI
-            # ==========================================
-            echo ""
-            echo "  ⚙️ Backup config files..."
-            for ext in .env .config .yml .yaml .toml .ini; do
-              find . -maxdepth 1 -name "*$ext" -type f 2>/dev/null | while read configfile; do
-                filename=$(basename "$configfile")
-                if [[ "$filename" != backup_* ]]; then
-                  cp "$configfile" "$BACKUP_DIR/" 2>/dev/null || true
-                  echo "    ✅ $filename"
-                fi
-              done
-            done
-            
-            # ==========================================
-            # 6. BACKUP SEMUA DATA FOLDER
-            # ==========================================
-            echo ""
-            echo "  📂 Backup data folders..."
-            for folder in data sessions users cache logs tmp temp database db store; do
-              if [ -d "$folder" ] && [[ "$folder" != backup_* ]]; then
-                echo "    ✅ $folder/"
-                mkdir -p "$BACKUP_DIR/$folder"
-                cp -r "$folder"/* "$BACKUP_DIR/$folder"/ 2>/dev/null || true
-              fi
-            done
-            
-            # ==========================================
-            # 7. BACKUP FILE USER DATA
-            # ==========================================
-            echo ""
-            echo "  👤 Backup user data files..."
-            find . -maxdepth 1 -name "*user*.json" -o -name "*session*.json" 2>/dev/null | while read userfile; do
-              filename=$(basename "$userfile")
-              if [[ "$filename" != backup_* ]]; then
-                cp "$userfile" "$BACKUP_DIR/" 2>/dev/null || true
-                echo "    ✅ $filename"
-              fi
-            done
-            
-            # ==========================================
-            # 8. BACKUP SEMUA FOLDER BOT_*
-            # ==========================================
-            echo ""
-            echo "  🤖 Backup bot_* folders..."
-            for bot_folder in bot_*/; do
-              if [ -d "$bot_folder" ] && [[ "$bot_folder" != backup_* ]]; then
-                FOLDER_NAME="${bot_folder%/}"
-                echo "    ✅ $FOLDER_NAME/"
-                mkdir -p "$BACKUP_DIR/$FOLDER_NAME"
-                # Backup semua file di bot folder
-                for item in "$FOLDER_NAME"/*; do
-                  if [ -f "$item" ]; then
-                    cp "$item" "$BACKUP_DIR/$FOLDER_NAME/" 2>/dev/null || true
-                  elif [ -d "$item" ] && [[ "$(basename "$item")" != "node_modules" ]]; then
-                    mkdir -p "$BACKUP_DIR/$FOLDER_NAME/$(basename "$item")"
-                    cp -r "$item"/* "$BACKUP_DIR/$FOLDER_NAME/$(basename "$item")"/ 2>/dev/null || true
-                  fi
-                done
-              fi
-            done
-            
-            # ==========================================
-            # 9. BACKUP FAKE-DEVICE.JS
-            # ==========================================
-            if [ -f "fake-device.js" ]; then
-              cp fake-device.js "$BACKUP_DIR/"
-              echo "  ✅ fake-device.js"
-            fi
-            
-            # ==========================================
-            # 10. BACKUP SSH INFO
-            # ==========================================
-            cp ~/ssh_ip.txt "$BACKUP_DIR/" 2>/dev/null || true
-            cp ~/ssh_pass.txt "$BACKUP_DIR/" 2>/dev/null || true
-            
-            # ==========================================
-            # 11. CREATE BACKUP INFO
-            # ==========================================
-            echo "Backup created: $(date)" > "$BACKUP_DIR/backup_info.txt"
-            echo "Backup type: SEMUA FILE" >> "$BACKUP_DIR/backup_info.txt"
-            echo "Total folders: $(ls -d */ 2>/dev/null | grep -v backup_ | wc -l)" >> "$BACKUP_DIR/backup_info.txt"
-            echo "Total files in root: $(find . -maxdepth 1 -type f | wc -l)" >> "$BACKUP_DIR/backup_info.txt"
-            echo "Backup number: $(ls -d backup_* 2>/dev/null | wc -l)" >> "$BACKUP_DIR/backup_info.txt"
-            
-            echo -e "${GREEN}[$(date)] BACKUP SEMUA FILE SELESAI: $BACKUP_DIR${NC}"
-            echo "$BACKUP_DIR" > ~/latest_backup.txt
-            
-            # Tampilkan isi backup
-            echo ""
-            echo "=== ISI BACKUP ==="
-            tree -L 2 "$BACKUP_DIR" 2>/dev/null || ls -la "$BACKUP_DIR"
-            echo ""
-            echo "Total size: $(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1)"
-          }
-          
-          # ============================================
-          # FUNCTION RESTORE SEMUA FILE
-          # ============================================
-          restore_all_files() {
-            echo -e "${BLUE}[$(date)] Restoring SEMUA FILE dari backup...${NC}"
-            
-            LATEST_BACKUP=$(ls -td backup_* 2>/dev/null | head -1)
-            
-            if [ -n "$LATEST_BACKUP" ]; then
-              echo -e "${YELLOW}Found backup: $LATEST_BACKUP${NC}"
-              echo "Restoring semua file..."
-              
-              # ==========================================
-              # 1. RESTORE SEMUA FOLDER
-              # ==========================================
-              for folder in "$LATEST_BACKUP"/*/; do
-                if [ -d "$folder" ]; then
-                  FOLDER_NAME=$(basename "$folder")
-                  if [[ "$FOLDER_NAME" != backup_* ]] && [[ "$FOLDER_NAME" != .* ]]; then
-                    echo "  📁 Restoring folder: $FOLDER_NAME/"
-                    mkdir -p "$FOLDER_NAME"
-                    cp -r "$folder"/* "$FOLDER_NAME"/ 2>/dev/null || true
-                  fi
-                fi
-              done
-              
-              # ==========================================
-              # 2. RESTORE SEMUA FILE DI ROOT
-              # ==========================================
-              echo "  📄 Restoring root files..."
-              for file in "$LATEST_BACKUP"/*; do
-                if [ -f "$file" ]; then
-                  FILENAME=$(basename "$file")
-                  if [[ "$FILENAME" != backup_* ]] && [[ "$FILENAME" != "backup_info.txt" ]]; then
-                    cp "$file" "./" 2>/dev/null || true
-                    echo "    ✅ $FILENAME"
-                  fi
-                fi
-              done
-              
-              # ==========================================
-              # 3. RESTORE FAKE-DEVICE.JS
-              # ==========================================
-              if [ -f "$LATEST_BACKUP/fake-device.js" ]; then
-                cp "$LATEST_BACKUP/fake-device.js" ./
-                echo "  ✅ fake-device.js"
-              fi
-              
-              echo -e "${GREEN}[$(date)] RESTORE SEMUA FILE SELESAI${NC}"
-            else
-              echo "No previous backup found, starting fresh"
-            fi
-          }
-          
-          # ============================================
-          # FUNCTION START ALL BOTS
-          # ============================================
-          start_all_bots() {
-            echo -e "${GREEN}[$(date)] Starting all bots on VPS 3.7 GHz...${NC}"
+          start_bots() {
+            echo -e "${GREEN}[$(date)] Starting bots...${NC}"
             
             export NODE_OPTIONS="--max-old-space-size=12288"
-            unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION GITHUB_ACTOR
-            unset GITHUB_REPOSITORY GITHUB_EVENT_NAME GITHUB_WORKFLOW
+            unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION
             
             PIDS=""
             BOT_COUNT=0
             
             for bot_dir in */; do
-              if [[ "$bot_dir" == backup_* ]] || [[ "$bot_dir" == .* ]]; then
+              if [[ "$bot_dir" == backup_* ]] || [[ "$bot_dir" == .* ]] || [[ "$bot_dir" == storage ]]; then
                 continue
               fi
               
-              # Detect main file
               MAIN_FILE=""
               if [ -f "${bot_dir}package.json" ]; then
                 cd "$bot_dir"
@@ -924,19 +674,10 @@ jobs:
               
               if [ -n "$MAIN_FILE" ]; then
                 BOT_COUNT=$((BOT_COUNT + 1))
-                
-                # Generate unique fake data
-                export ANDROID_ID=$(openssl rand -hex 16)
-                export GAID=$(openssl rand -hex 16)
                 export FAKE_IMEI="35$(openssl rand -hex 12 | head -c 13)"
                 export FAKE_MAC="02:$(openssl rand -hex 6 | sed 's/\(..\)/\1:/g' | cut -d: -f1-5):$(openssl rand -hex 2 | head -c 2)"
-                export FAKE_LATITUDE="-$((RANDOM % 90)).$((RANDOM % 999999))"
-                export FAKE_LONGITUDE="$((RANDOM % 180)).$((RANDOM % 999999))"
                 
                 echo -e "${CYAN}[BOT $BOT_COUNT] Starting: ${bot_dir} - $MAIN_FILE${NC}"
-                echo "  📱 IMEI: $FAKE_IMEI"
-                echo "  🔗 MAC: $FAKE_MAC"
-                echo "  🚀 Running on: 3.7 GHz VPS"
                 
                 cd "$bot_dir"
                 node -r ../fake-device.js "$MAIN_FILE" &
@@ -947,28 +688,22 @@ jobs:
             done
             
             echo "$PIDS" > ~/bot_pids.txt
-            echo -e "${GREEN}[$(date)] Started $BOT_COUNT bots with PIDs: $PIDS${NC}"
-            return 0
+            echo -e "${GREEN}[$(date)] Started $BOT_COUNT bots${NC}"
           }
           
           # ============================================
-          # FUNCTION TRIGGER WORKFLOW BARU
+          # FUNCTION RESTART WORKFLOW
           # ============================================
-          trigger_new_workflow() {
-            echo -e "${BLUE}[$(date)] Triggering new workflow dengan BACKUP SEMUA FILE...${NC}"
+          restart_workflow() {
+            echo -e "${YELLOW}[$(date)] Restarting workflow...${NC}"
             
-            # Backup semua file (INI SATU-SATUNYA BACKUP YANG TERJADI)
-            backup_all_files
-            
-            # Simpan state
-            LATEST_BACKUP=$(cat ~/latest_backup.txt 2>/dev/null || echo "none")
-            echo "STATE_$(date +%s)" > ~/workflow_state.txt
-            echo "Last backup: $LATEST_BACKUP" >> ~/workflow_state.txt
-            echo "Restart count: $RESTART_COUNT" >> ~/workflow_state.txt
-            echo "Backup type: SEMUA FILE" >> ~/workflow_state.txt
+            # Backup dulu
+            echo "📦 Creating backup..."
+            BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            cp -r ./* "$BACKUP_DIR/" 2>/dev/null || true
             
             # Trigger workflow baru
-            echo -e "${YELLOW}Triggering new workflow...${NC}"
             curl -X POST \
               -H "Accept: application/vnd.github.v3+json" \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -982,75 +717,36 @@ jobs:
           # FUNCTION GRACEFUL SHUTDOWN
           # ============================================
           graceful_shutdown() {
-            echo -e "${YELLOW}[$(date)] Performing graceful shutdown...${NC}"
+            echo -e "${YELLOW}[$(date)] Shutting down...${NC}"
             
             if [ -f ~/bot_pids.txt ]; then
-              BOT_PIDS=$(cat ~/bot_pids.txt)
-              for PID in $BOT_PIDS; do
-                echo "  Stopping bot PID: $PID"
+              for PID in $(cat ~/bot_pids.txt); do
                 kill -15 $PID 2>/dev/null || true
                 sleep 1
                 kill -9 $PID 2>/dev/null || true
               done
             fi
             
-            if [ -f ~/tunnel_pid.txt ]; then
-              TUNNEL_PID=$(cat ~/tunnel_pid.txt)
-              echo "  Stopping tunnel PID: $TUNNEL_PID"
-              kill -15 $TUNNEL_PID 2>/dev/null || true
-              sleep 1
-              kill -9 $TUNNEL_PID 2>/dev/null || true
-            fi
-            
-            echo -e "${GREEN}[$(date)] Graceful shutdown complete${NC}"
-          }
-          
-          # ============================================
-          # FUNCTION SPEED MONITOR
-          # ============================================
-          check_speed() {
-            echo "📊 Network Speed Test:"
-            speedtest-cli --simple 2>/dev/null || echo "Speed: 50+ Mbps (optimized)"
+            echo -e "${GREEN}[$(date)] Shutdown complete${NC}"
           }
           
           # ============================================
           # MAIN EXECUTION
           # ============================================
           echo -e "${PURPLE}========================================${NC}"
-          echo -e "${CYAN}  🚀 VPS TERBAIK DUNIA - 3.7 GHz 🚀${NC}"
+          echo -e "${CYAN}  🚀 BOT SYSTEM RUNNING 🚀${NC}"
           echo -e "${PURPLE}========================================${NC}"
-          
-          # Restore semua file dari backup
-          restore_all_files
+          echo "Storage: $STORAGE_SIZE ($STORAGE_AVAIL available)"
+          echo "Threshold: $STORAGE_THRESHOLD% Auto-Restart"
+          echo "Start time: $(date)"
+          echo ""
           
           # Start bots
-          start_all_bots
-          
-          # Start Cloudflare Tunnel
-          echo "Starting Cloudflare Tunnel..."
-          ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
-          TUNNEL_PID=$!
-          echo $TUNNEL_PID > ~/tunnel_pid.txt
+          start_bots
           
           # Start timing
           START_TIME=$(date +%s)
           RESTART_COUNT=0
-          
-          if [ -f ~/workflow_state.txt ]; then
-            PREV_RESTART=$(grep "Restart count:" ~/workflow_state.txt | awk '{print $3}')
-            if [ -n "$PREV_RESTART" ]; then
-              RESTART_COUNT=$PREV_RESTART
-            fi
-          fi
-          
-          echo ""
-          echo -e "${GREEN}=== SYSTEM RUNNING ===${NC}"
-          echo "Workflow Lifetime: 6 JAM PAS"
-          echo "Backup: HANYA 1 KALI di 6 JAM (SEMUA FILE)"
-          echo "Start time: $(date)"
-          echo "Restart count: $RESTART_COUNT"
-          echo "Speed Target: 10-50 Mbps"
-          echo ""
           
           # MAIN LOOP
           while true; do
@@ -1059,115 +755,69 @@ jobs:
             CURRENT_TIME=$(date +%s)
             ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
             
-            # Check speed every 10 minutes
-            if [ $((ELAPSED_TIME % 600)) -lt 60 ]; then
-              check_speed
+            # CEK STORAGE setiap 5 menit
+            if [ $((ELAPSED_TIME % 300)) -lt 60 ]; then
+              if ! check_storage; then
+                # Storage penuh, restart
+                restart_workflow
+                graceful_shutdown
+                exit 0
+              fi
             fi
             
-            # Check if it's time to restart workflow (6 JAM PAS)
+            # Check if it's time to restart (6 jam)
             if [ $ELAPSED_TIME -ge $RESTART_INTERVAL ]; then
-              echo ""
-              echo -e "${PURPLE}========================================${NC}"
-              echo -e "${YELLOW}[$(date)] AUTO-RESTART TRIGGERED (6 JAM PAS)${NC}"
-              echo -e "${PURPLE}========================================${NC}"
-              echo "Uptime: $((ELAPSED_TIME / 3600))h $(((ELAPSED_TIME % 3600) / 60))m $((ELAPSED_TIME % 60))s"
-              echo ""
-              
-              # INI SATU-SATUNYA BACKUP YANG TERJADI
-              trigger_new_workflow
+              echo -e "${YELLOW}[$(date)] 6 jam reached, restarting...${NC}"
+              restart_workflow
               graceful_shutdown
-              
-              echo -e "${GREEN}[$(date)] Handing over to new workflow...${NC}"
               exit 0
-              
-            else
-              # Check if bots are running
-              ALL_ALIVE=true
-              if [ -f ~/bot_pids.txt ]; then
-                BOT_PIDS=$(cat ~/bot_pids.txt)
-                for PID in $BOT_PIDS; do
-                  if ! kill -0 $PID 2>/dev/null; then
-                    echo -e "${RED}[WARNING] Bot PID $PID died!${NC}"
-                    ALL_ALIVE=false
-                  fi
-                done
-              fi
-              
-              if [ "$ALL_ALIVE" = false ]; then
-                echo -e "${YELLOW}Bot(s) died, restarting...${NC}"
-                if [ -f ~/bot_pids.txt ]; then
-                  BOT_PIDS=$(cat ~/bot_pids.txt)
-                  for PID in $BOT_PIDS; do
-                    kill -9 $PID 2>/dev/null || true
-                  done
+            fi
+            
+            # Check bots alive
+            if [ -f ~/bot_pids.txt ]; then
+              for PID in $(cat ~/bot_pids.txt); do
+                if ! kill -0 $PID 2>/dev/null; then
+                  echo -e "${RED}[WARNING] Bot PID $PID died!${NC}"
                 fi
-                sleep 2
-                start_all_bots
-              fi
-              
-              # Check tunnel
-              if [ -f ~/tunnel_pid.txt ]; then
-                TUNNEL_PID=$(cat ~/tunnel_pid.txt)
-                if ! kill -0 $TUNNEL_PID 2>/dev/null; then
-                  echo "Tunnel died, restarting..."
-                  ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
-                  echo $! > ~/tunnel_pid.txt
-                  echo "Tunnel restarted"
-                fi
-              fi
-              
-              # Show status every 5 minutes
-              if [ $((ELAPSED_TIME % 300)) -lt 60 ]; then
-                HOURS=$((ELAPSED_TIME / 3600))
-                MINUTES=$(((ELAPSED_TIME % 3600) / 60))
-                SECONDS=$((ELAPSED_TIME % 60))
-                REMAINING_TIME=$((RESTART_INTERVAL - ELAPSED_TIME))
-                REMAINING_HOURS=$((REMAINING_TIME / 3600))
-                REMAINING_MINUTES=$(((REMAINING_TIME % 3600) / 60))
-                REMAINING_SECONDS=$((REMAINING_TIME % 60))
-                
-                echo ""
-                echo -e "${PURPLE}=== STATUS UPDATE ===${NC}"
-                echo "Uptime: ${HOURS}h ${MINUTES}m ${SECONDS}s"
-                echo "Remaining until restart: ${REMAINING_HOURS}h ${REMAINING_MINUTES}m ${REMAINING_SECONDS}s"
-                echo "Restarts: $RESTART_COUNT"
-                echo "Backups: $(ls -d backup_* 2>/dev/null | wc -l)"
-                echo "Bots running: $(cat ~/bot_pids.txt 2>/dev/null | wc -w)"
-                echo "Backup type: SEMUA FILE (HANYA 1 KALI di 6 JAM)"
-                echo "Time: $(date)"
-                echo "Speed: 10-50 Mbps (optimized)"
-                echo ""
-              fi
+              done
+            fi
+            
+            # Show status every 10 minutes
+            if [ $((ELAPSED_TIME % 600)) -lt 60 ]; then
+              HOURS=$((ELAPSED_TIME / 3600))
+              MINUTES=$(((ELAPSED_TIME % 3600) / 60))
+              echo ""
+              echo -e "${PURPLE}=== STATUS UPDATE ===${NC}"
+              echo "Uptime: ${HOURS}h ${MINUTES}m"
+              echo "Restarts: $RESTART_COUNT"
+              echo "Time: $(date)"
+              check_storage
+              echo ""
             fi
           done
           BOTSYSTEM
           
           chmod +x bot_system.sh
-          
+
       - name: Download Cloudflared
         run: |
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
-          
+
       - name: Run Bot System
         run: |
-          echo "=== STARTING MULTI BOT SYSTEM 24/7 ==="
-          echo "🚀 VPS: Intel Xeon Platinum 8380 @ 3.70GHz"
-          echo "💻 Cores: 128 Core / 256 Threads"
-          echo "💾 RAM: 256 GB DDR5 ECC"
-          echo "💿 Storage: 4 TB NVMe SSD"
-          echo "Workflow Lifetime: 6 JAM PAS"
-          echo "Backup: HANYA 1 KALI di 6 JAM (SEMUA FILE)"
+          echo "=== STARTING BOT SYSTEM ==="
+          echo "Storage: Auto-Detect"
+          echo "Threshold: 95% Auto-Restart"
           echo "Speed Target: 10-50 Mbps"
           echo ""
-          
           ./bot_system.sh
-          
+
       - name: Keep Workflow Alive
         run: |
           while true; do
             sleep 300
-            echo "[$(date)] Workflow still running - Speed: 10-50 Mbps"
+            echo "[$(date)] Workflow still running - Storage: Auto-Detect"
             
             if ! pgrep -f "bot_system.sh" > /dev/null; then
               echo "WARNING: Bot system died! Restarting..."
@@ -1176,9 +826,9 @@ jobs:
           done
 
       # ============================================
-      # UPLOAD BACKUP SEMUA FILE KE ARTIFACT
+      # UPLOAD BACKUP KE ARTIFACT
       # ============================================
-      - name: Upload Backup SEMUA FILE ke Artifact
+      - name: Upload Backup ke Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -1189,7 +839,6 @@ jobs:
             *.json
             *.db
             *.sqlite
-            *.sql
             *.env
             *.config
             *.yml
@@ -1198,20 +847,15 @@ jobs:
             *.md
             *.js
             *.sh
-            *.toml
-            *.ini
             data/
             sessions/
             users/
-            cache/
             logs/
-            tmp/
-            temp/
             downloads/
+            uploads/
             ~/ssh_ip.txt
             ~/ssh_pass.txt
             ~/latest_backup.txt
-            ~/workflow_state.txt
             ~/bot_pids.txt
           retention-days: 1
           compression-level: 9
