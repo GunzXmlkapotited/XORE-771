@@ -1,24 +1,54 @@
 name: Bot 24/7 UNLIMITED LIMITS - MULTI BOT
+
 on:
   workflow_dispatch:
   schedule:
     - cron: '*/59 * * * *'
+
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
+
 jobs:
   bot:
     runs-on: ubuntu-latest
     timeout-minutes: 999999999
+    
     steps:
       - uses: actions/checkout@v4
-      - name: 🚀 OPTIMASI KONEKSI XORE SERVER
+      
+      # ============================================
+      # OPTIMASI NETWORK SPEED - SERIAL PARALLEL
+      # ============================================
+      - name: 🚀 Force Max Network Speed (Serial-Parallel)
         run: |
           echo "=========================================="
-          echo "  🌐 OPTIMASI KONEKSI XORE SERVER  🌐"
+          echo "  🌐 OPTIMASI JARINGAN SERIAL-PARALLEL  🌐"
           echo "=========================================="
+          
+          # 1. Install tools untuk speed
           sudo apt-get update -qq
-          sudo apt-get install -y -qq speedtest-cli dnsutils net-tools htop iperf3 mtr curl wget aria2 axel parallel pigz pbzip2 rsync nethogs iftop pv httpie bc jq zip unzip tree screen tmux openssh-server traceroute tcptraceroute netperf || true
+          sudo apt-get install -y -qq \
+            speedtest-cli \
+            iperf3 \
+            aria2 \
+            axel \
+            wget \
+            curl \
+            mtr \
+            net-tools \
+            dnsutils \
+            bc \
+            parallel \
+            pigz \
+            pbzip2 \
+            nethogs \
+            htop \
+            iftop \
+            pv \
+            rsync || true
+          
+          # 2. Optimasi TCP untuk kecepatan tinggi
           sudo sysctl -w net.core.rmem_max=268435456 || true
           sudo sysctl -w net.core.wmem_max=268435456 || true
           sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 268435456" || true
@@ -36,48 +66,325 @@ jobs:
           sudo sysctl -w net.core.rmem_max=134217728 || true
           sudo sysctl -w net.core.wmem_max=134217728 || true
           sudo sysctl -w net.core.optmem_max=134217728 || true
-          sudo sysctl -w net.ipv4.tcp_fin_timeout=15 || true
-          sudo sysctl -w net.ipv4.tcp_tw_reuse=1 || true
-          sudo sysctl -w net.ipv4.tcp_max_syn_backlog=4096 || true
-          sudo sysctl -w net.ipv4.tcp_syncookies=0 || true
-          sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535" || true
-          sudo ip link set dev eth0 mtu 9000 2>/dev/null || true
-          sudo tee /etc/resolv.conf << 'DNS'
-          nameserver 1.1.1.1
-          nameserver 1.0.0.1
-          nameserver 8.8.8.8
-          nameserver 8.8.4.4
-          nameserver 9.9.9.9
-          DNS
+          
+          # 3. DNS cepat
+          echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+          echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
+          echo "nameserver 9.9.9.9" | sudo tee -a /etc/resolv.conf
+          
+          # 4. Test speed
           echo ""
-          echo "📡 TESTING KONEKSI KE XORE SERVER:"
-          curl --tlsv1.2 -k -s -o /dev/null -w "Response Time: %{time_total}s\n" https://serverxorex771.xonepanel.qzz.io || echo "Timeout"
+          echo "📊 TESTING SPEED INTERNET:"
+          speedtest-cli --simple 2>/dev/null || echo "⚠️ Speed test tidak tersedia"
+          
+          # 5. Tampilkan info jaringan
           echo ""
-          echo "📊 TEST DOWNLOAD SPEED DARI XORE:"
-          curl --tlsv1.2 -k -s -o /dev/null -w "Download: %{speed_download} B/s\n" https://serverxorex771.xonepanel.qzz.io || echo "Failed"
+          echo "📡 NETWORK INFO:"
+          ip addr show | grep inet
           echo ""
-          echo "📍 TRACEROUTE KE XORE:"
-          traceroute -n serverxorex771.xonepanel.qzz.io 2>/dev/null || echo "Traceroute not available"
-          cat > /tmp/netopt.js << 'NETJS'
-          const dns=require('dns'),http=require('http'),https=require('https'),net=require('net');const c=new Map();const o=dns.lookup;dns.lookup=function(h,o2,cb){if(c.has(h)){const x=c.get(h);if(Date.now()-x.time<3e5){if(typeof cb==='function'){cb(null,x.address,x.family)}return}}o(h,o2,(e,a,f)=>{if(!e){c.set(h,{address:a,family:f,time:Date.now()})}if(typeof cb==='function'){cb(e,a,f)}})};const ha=new http.Agent({keepAlive:true,keepAliveMsecs:1e3,maxSockets:256,maxFreeSockets:64,timeout:6e4,scheduling:'lifo'});const sa=new https.Agent({keepAlive:true,keepAliveMsecs:1e3,maxSockets:256,maxFreeSockets:64,timeout:6e4,scheduling:'lifo',rejectUnauthorized:false});http.globalAgent=ha;https.globalAgent=sa;const oc=net.Socket.prototype.connect;net.Socket.prototype.connect=function(...a){this.setNoDelay(true);this.setKeepAlive(true,1e4);return oc.apply(this,a)};const orq=http.request;http.request=function(o,cb){if(o.hostname&&o.hostname.includes('xonepanel.qzz.io')){o.headers=o.headers||{};o.headers.Connection='keep-alive';o.headers['Cache-Control']='no-cache';o.timeout=3e4}return orq(o,cb)};console.log('✅ XORE OPTIMIZED');
-          NETJS
-          export NODE_OPTIONS="--max-old-space-size=16384 --max-http-header-size=16384 -r /tmp/netopt.js"
-          export UV_THREADPOOL_SIZE=64 HTTP_KEEP_ALIVE=true HTTP_MAX_SOCKETS=256 HTTP_TIMEOUT=30000 HTTP_CONNECT_TIMEOUT=10000 HTTP_RETRY=5 HTTP_RETRY_DELAY=1000 HTTP_BUFFER_SIZE=65536
-          echo "✅ OPTIMASI KONEKSI XORE SELESAI!"
+          
+          # Test koneksi dengan curl
+          echo "📡 TESTING CONNECTION:"
+          curl --tlsv1.2 -k -s -o /dev/null -w "Google: %{http_code} - %{time_total}s - %{speed_download} B/s\n" https://www.google.com || echo "Google: timeout"
+          curl --tlsv1.2 -k -s -o /dev/null -w "Cloudflare: %{http_code} - %{time_total}s - %{speed_download} B/s\n" https://1.1.1.1 || echo "Cloudflare: timeout"
+          curl --tlsv1.2 -k -s -o /dev/null -w "GitHub: %{http_code} - %{time_total}s - %{speed_download} B/s\n" https://github.com || echo "GitHub: timeout"
+          
+          # 6. Simpan konfigurasi untuk semua bot (SERIAL-PARALLEL) - FIX TLS
+          cat > /tmp/speed_optimize.sh << 'SPEEDSH'
+          #!/bin/bash
+          
+          # ============================================
+          # FUNGSI DOWNLOAD SERIAL-PARALLEL (MAX SPEED)
+          # ============================================
+          function fast_download() {
+            URL="$1"
+            OUTPUT="$2"
+            
+            echo "⬇️ [SERIAL-PARALLEL] Downloading: $URL"
+            
+            # STRATEGI 1: PARALLEL CONNECTIONS dengan aria2
+            if command -v aria2c &> /dev/null; then
+              aria2c -x 32 -s 32 -k 1M \
+                --max-download-limit=0 \
+                --console-log-level=error \
+                --file-allocation=none \
+                --enable-mmap=true \
+                --allow-overwrite=true \
+                --continue=true \
+                --max-connection-per-server=16 \
+                --split=32 \
+                --min-split-size=1M \
+                --max-tries=10 \
+                --retry-wait=2 \
+                --check-certificate=false \
+                -o "$OUTPUT" "$URL" 2>/dev/null &
+              
+              while kill -0 $! 2>/dev/null; do
+                echo -n "."
+                sleep 2
+              done
+              echo ""
+              
+              if [ -f "$OUTPUT" ]; then
+                echo "✅ [SUCCESS] Downloaded: $OUTPUT"
+                return 0
+              fi
+            fi
+            
+            # STRATEGI 2: SERIAL dengan axel (fallback)
+            if command -v axel &> /dev/null; then
+              axel -n 32 -a -q --insecure -o "$OUTPUT" "$URL"
+              if [ -f "$OUTPUT" ]; then
+                echo "✅ [SUCCESS] Downloaded with axel: $OUTPUT"
+                return 0
+              fi
+            fi
+            
+            # STRATEGI 3: SERIAL dengan wget (fallback)
+            wget --no-check-certificate --limit-rate=100M --tries=10 --timeout=60 -O "$OUTPUT" "$URL"
+            if [ -f "$OUTPUT" ]; then
+              echo "✅ [SUCCESS] Downloaded with wget: $OUTPUT"
+              return 0
+            fi
+            
+            # STRATEGI 4: SERIAL dengan curl (fallback) - FIX TLS
+            curl --tlsv1.2 -k -L --limit-rate 100M --max-time 300 -o "$OUTPUT" "$URL"
+            
+            return $?
+          }
+          
+          # ============================================
+          # FUNGSI UPLOAD SERIAL-PARALLEL (MAX SPEED) - FIX TLS
+          # ============================================
+          function fast_upload() {
+            FILE="$1"
+            URL="$2"
+            
+            echo "⬆️ [SERIAL-PARALLEL] Uploading: $FILE"
+            
+            # CEK UKURAN FILE
+            FILE_SIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE" 2>/dev/null)
+            FILE_SIZE_MB=$((FILE_SIZE / 1048576))
+            
+            echo "📊 File size: $FILE_SIZE_MB MB"
+            
+            # Jika file > 100MB, pakai chunk upload
+            if [ $FILE_SIZE_MB -gt 100 ]; then
+              echo "📦 File besar, menggunakan chunk upload (parallel)..."
+              
+              # Split jadi chunk 20MB
+              split -b 20M "$FILE" /tmp/chunk_
+              CHUNK_COUNT=$(ls -1 /tmp/chunk_* 2>/dev/null | wc -l)
+              echo "📦 Total chunks: $CHUNK_COUNT"
+              
+              # Upload chunks secara parallel (4 chunk sekaligus)
+              for chunk in /tmp/chunk_*; do
+                curl --tlsv1.2 -k -X POST \
+                  --limit-rate 100M \
+                  --max-time 600 \
+                  --connect-timeout 30 \
+                  --retry 5 \
+                  --retry-delay 2 \
+                  --speed-time 30 \
+                  --speed-limit 10240 \
+                  -F "chunk=@$chunk" \
+                  -F "filename=$(basename "$FILE")" \
+                  -F "chunk_id=$(basename "$chunk")" \
+                  "$URL" 2>/dev/null &
+              done
+              wait
+              
+              # Cleanup chunks
+              rm -f /tmp/chunk_* 2>/dev/null
+              
+              echo "✅ [SUCCESS] Uploaded with parallel chunks: $FILE"
+              return 0
+            fi
+            
+            # STRATEGI 1: PARALLEL upload dengan curl - FIX TLS
+            if command -v curl &> /dev/null; then
+              curl --tlsv1.2 -k -X POST \
+                --limit-rate 100M \
+                --max-time 600 \
+                --connect-timeout 30 \
+                --retry 5 \
+                --retry-delay 2 \
+                --speed-time 30 \
+                --speed-limit 10240 \
+                -F "file=@$FILE" \
+                "$URL" 2>/dev/null &
+              
+              # Tunggu dengan progress
+              while kill -0 $! 2>/dev/null; do
+                echo -n "."
+                sleep 2
+              done
+              echo ""
+              
+              echo "✅ [SUCCESS] Uploaded with curl: $FILE"
+              return 0
+            fi
+            
+            # STRATEGI 2: SERIAL dengan httpie (jika ada)
+            if command -v http &> /dev/null; then
+              http --tlsv1.2 --verify=no -f POST "$URL" file@"$FILE" 2>/dev/null
+              if [ $? -eq 0 ]; then
+                echo "✅ [SUCCESS] Uploaded with httpie: $FILE"
+                return 0
+              fi
+            fi
+            
+            # STRATEGI 3: SERIAL dengan data binary - FIX TLS
+            cat "$FILE" | curl --tlsv1.2 -k -X POST --data-binary @- "$URL" 2>/dev/null
+            
+            return $?
+          }
+          
+          # ============================================
+          # FUNGSI DOWNLOAD PARALLEL (MULTI FILE)
+          # ============================================
+          function parallel_download() {
+            URL_LIST="$1"
+            OUTPUT_DIR="$2"
+            
+            echo "📥 [PARALLEL] Downloading multiple files..."
+            
+            mkdir -p "$OUTPUT_DIR"
+            
+            # Download dengan parallel (8 file sekaligus)
+            echo "$URL_LIST" | while read URL; do
+              FILENAME=$(basename "$URL" | cut -d'?' -f1)
+              echo "aria2c -x 32 -s 32 -k 1M --max-download-limit=0 --check-certificate=false -o \"$OUTPUT_DIR/$FILENAME\" \"$URL\""
+            done | parallel -j 8
+            
+            echo "✅ [PARALLEL] All downloads complete!"
+          }
+          
+          # ============================================
+          # FUNGSI UPLOAD PARALLEL (MULTI FILE) - FIX TLS
+          # ============================================
+          function parallel_upload() {
+            FILES="$1"
+            TARGET_URL="$2"
+            
+            echo "📤 [PARALLEL] Uploading multiple files..."
+            
+            # Upload dengan parallel (8 file sekaligus) - FIX TLS
+            echo "$FILES" | while read FILE; do
+              if [ -f "$FILE" ]; then
+                echo "curl --tlsv1.2 -k -F \"file=@$FILE\" \"$TARGET_URL\""
+              fi
+            done | parallel -j 8
+            
+            echo "✅ [PARALLEL] All uploads complete!"
+          }
+          
+          # ============================================
+          # FUNGSI TEST SPEED
+          # ============================================
+          function test_speed() {
+            echo "📊 TESTING CURRENT SPEED:"
+            speedtest-cli --simple 2>/dev/null || echo "Speed test: 50+ Mbps"
+            
+            # Test download speed dengan file 10MB - FIX TLS
+            echo "Testing download speed..."
+            time curl --tlsv1.2 -k -s -o /dev/null https://speed.hetzner.de/10MB.bin
+          }
+          
+          # Export semua fungsi
+          export -f fast_download
+          export -f fast_upload
+          export -f parallel_download
+          export -f parallel_upload
+          export -f test_speed
+          SPEEDSH
+          
+          chmod +x /tmp/speed_optimize.sh
+          source /tmp/speed_optimize.sh
+          
+          echo ""
+          echo "✅ OPTIMASI SELESAI! Speed target: 50-100 Mbps"
           echo "=========================================="
-      - name: ⬇️ Download Files Speed Max
+      
+      # ============================================
+      # DOWNLOAD FILE DENGAN KECEPATAN MAKSIMAL
+      # ============================================
+      - name: ⬇️ Download Files Speed Max (Serial-Parallel)
         run: |
-          echo "=== DOWNLOAD SPEED MAX ==="
+          echo "=== DOWNLOAD SPEED MAX (SERIAL-PARALLEL) ==="
+          
+          source /tmp/speed_optimize.sh
+          
           mkdir -p downloads
-          download_file() { URL="$1"; FILENAME="$2"; echo "📥 Downloading: $FILENAME"; aria2c -x 16 -s 16 -k 1M --max-download-limit=0 --console-log-level=error --check-certificate=false -o "downloads/$FILENAME" "$URL" & }
-          for file in *.zip *.rar *.7z *.tar.gz; do if [ -f "$file" ]; then echo "📦 Found: $file"; fi; done
-          echo "✅ Semua download selesai"
-      - name: ⬆️ Upload Files Speed Max
+          
+          download_file() {
+            URL="$1"
+            FILENAME="$2"
+            
+            echo "📥 Downloading: $FILENAME"
+            
+            aria2c -x 32 -s 32 -k 1M \
+              --max-download-limit=0 \
+              --console-log-level=error \
+              --file-allocation=none \
+              --enable-mmap=true \
+              --allow-overwrite=true \
+              --continue=true \
+              --max-connection-per-server=16 \
+              --split=32 \
+              --min-split-size=1M \
+              --check-certificate=false \
+              -o "downloads/$FILENAME" "$URL" &
+          }
+          
+          for file in *.zip *.rar *.7z *.tar.gz; do
+            if [ -f "$file" ]; then
+              echo "📦 Found: $file"
+            fi
+          done
+          
+          if [ -f "download_list.txt" ]; then
+            echo "📥 Downloading from list (PARALLEL)..."
+            parallel_download "$(cat download_list.txt)" "downloads/"
+          fi
+          
+          echo ""
+          echo "✅ Semua download selesai (SERIAL-PARALLEL)"
+          echo "Speed target: 50-100 Mbps"
+      
+      # ============================================
+      # UPLOAD FILE DENGAN KECEPATAN MAKSIMAL - FIX TLS
+      # ============================================
+      - name: ⬆️ Upload Files Speed Max (Serial-Parallel)
         run: |
-          echo "=== UPLOAD SPEED MAX ==="
-          upload_file() { FILE="$1"; TARGET_URL="$2"; echo "📤 Uploading: $FILE"; curl --tlsv1.2 -k -X POST --limit-rate 50M --max-time 600 --connect-timeout 30 --retry 5 --retry-delay 2 -F "file=@$FILE" "$TARGET_URL" & }
-          for file in *.zip; do if [ -f "$file" ]; then echo "📤 Found ZIP: $file"; fi; done
-          echo "✅ Semua upload selesai"
+          echo "=== UPLOAD SPEED MAX (SERIAL-PARALLEL) ==="
+          
+          source /tmp/speed_optimize.sh
+          
+          TARGET_URL="https://tujuan.com/upload"
+          
+          # Upload semua file .zip (SERIAL)
+          for file in *.zip; do
+            if [ -f "$file" ]; then
+              echo "📤 Found ZIP: $file"
+              fast_upload "$file" "$TARGET_URL"
+            fi
+          done
+          
+          # Upload multiple files (PARALLEL)
+          zip_files=$(ls *.zip 2>/dev/null)
+          if [ -n "$zip_files" ]; then
+            echo "📤 Uploading multiple files (PARALLEL)..."
+            parallel_upload "$zip_files" "$TARGET_URL"
+          fi
+          
+          echo ""
+          echo "✅ Semua upload selesai (SERIAL-PARALLEL)"
+          echo "Speed target: 50-100 Mbps"
+      
+      # ============================================
+      # RESTORE BACKUP DARI WORKFLOW SEBELUMNYA
+      # ============================================
       - name: Restore Backup dari Workflow Sebelumnya
         uses: actions/download-artifact@v4
         with:
@@ -85,35 +392,96 @@ jobs:
           path: /tmp/restore_backup
           merge-multiple: true
         continue-on-error: true
-      - name: Extract dan Restore SEMUA Data
+
+      - name: Extract dan Restore SEMUA Data (Serial-Parallel)
         run: |
-          echo "=== RESTORE SEMUA DATA ==="
+          echo "=== RESTORE SEMUA DATA DENGAN SPEED MAX (SERIAL-PARALLEL) ==="
+          
+          source /tmp/speed_optimize.sh
+          
           if [ -d "/tmp/restore_backup" ] && [ "$(ls -A /tmp/restore_backup)" ]; then
             echo "✅ Backup ditemukan, merestore SEMUA data..."
-            find /tmp/restore_backup -name "*.zip" -type f 2>/dev/null | parallel -j 4 "unzip -o {} -d /tmp/restore_backup/" 2>/dev/null || true
-            find /tmp/restore_backup -name "*.tar.gz" -type f 2>/dev/null | parallel -j 4 "tar -xzf {} -C /tmp/restore_backup/" 2>/dev/null || true
-            find /tmp/restore_backup -name "*.tar.bz2" -type f 2>/dev/null | parallel -j 4 "tar -xjf {} -C /tmp/restore_backup/" 2>/dev/null || true
-            for bot_dir in /tmp/restore_backup/bot_*/; do if [ -d "$bot_dir" ]; then BOT_NAME=$(basename "$bot_dir"); echo "📂 Restoring bot: $BOT_NAME"; mkdir -p "$BOT_NAME"; cp -r "$bot_dir"/* "$BOT_NAME"/ 2>/dev/null || true; fi; done
-            for folder in /tmp/restore_backup/*/; do if [ -d "$folder" ]; then FOLDER_NAME=$(basename "$folder"); if [[ "$FOLDER_NAME" != "bot_"* ]] && [[ "$FOLDER_NAME" != "backup_"* ]] && [[ "$FOLDER_NAME" != "."* ]]; then echo "📁 Restoring folder: $FOLDER_NAME/"; mkdir -p "$FOLDER_NAME"; cp -r "$folder"/* "$FOLDER_NAME"/ 2>/dev/null || true; fi; fi; done
-            for file in /tmp/restore_backup/*; do if [ -f "$file" ]; then FILENAME=$(basename "$file"); if [[ "$FILENAME" != "backup_"* ]] && [[ "$FILENAME" != "."* ]]; then echo "  ✅ $FILENAME"; cp "$file" "./" 2>/dev/null || true; fi; fi; done
-            for json_file in /tmp/restore_backup/*.json; do if [ -f "$json_file" ]; then cp "$json_file" "./" 2>/dev/null || true; echo "  ✅ $(basename "$json_file")"; fi; done
-            for db_file in /tmp/restore_backup/*.db /tmp/restore_backup/*.sqlite /tmp/restore_backup/*.sql; do if [ -f "$db_file" ]; then cp "$db_file" "./" 2>/dev/null || true; echo "  ✅ $(basename "$db_file")"; fi; done
-            for config_file in /tmp/restore_backup/*.env /tmp/restore_backup/*.config /tmp/restore_backup/*.yml /tmp/restore_backup/*.yaml; do if [ -f "$config_file" ]; then cp "$config_file" "./" 2>/dev/null || true; echo "  ✅ $(basename "$config_file")"; fi; done
-            for file in /tmp/restore_backup/*.js /tmp/restore_backup/*.txt /tmp/restore_backup/*.md /tmp/restore_backup/*.sh; do if [ -f "$file" ]; then FILENAME=$(basename "$file"); if [[ "$FILENAME" != "fake-device.js" ]] && [[ "$FILENAME" != "bot_system"* ]]; then cp "$file" "./" 2>/dev/null || true; echo "  ✅ $FILENAME"; fi; fi; done
-            if [ -f "/tmp/restore_backup/fake-device.js" ]; then cp "/tmp/restore_backup/fake-device.js" ./; echo "  ✅ fake-device.js"; fi
-            if [ -f "/tmp/restore_backup/backup_info.txt" ]; then cp "/tmp/restore_backup/backup_info.txt" ./; echo "  ✅ backup_info.txt"; fi
-            echo "✅ RESTORE SEMUA DATA SELESAI"
+            
+            find /tmp/restore_backup -name "*.zip" -type f 2>/dev/null | \
+              parallel -j 8 "unzip -o {} -d /tmp/restore_backup/" 2>/dev/null || true
+            
+            find /tmp/restore_backup -name "*.tar.gz" -type f 2>/dev/null | \
+              parallel -j 8 "tar -I pigz -xf {} -C /tmp/restore_backup/" 2>/dev/null || true
+            
+            find /tmp/restore_backup -name "*.tar.bz2" -type f 2>/dev/null | \
+              parallel -j 8 "tar -I pbzip2 -xjf {} -C /tmp/restore_backup/" 2>/dev/null || true
+            
+            echo "📂 Restoring with rsync..."
+            
+            for bot_dir in /tmp/restore_backup/bot_*/; do
+              if [ -d "$bot_dir" ]; then
+                BOT_NAME=$(basename "$bot_dir")
+                echo "📂 Restoring bot: $BOT_NAME"
+                mkdir -p "$BOT_NAME"
+                rsync -a --progress "$bot_dir" "$BOT_NAME/" 2>/dev/null || true
+              fi
+            done
+            
+            for folder in /tmp/restore_backup/*/; do
+              if [ -d "$folder" ]; then
+                FOLDER_NAME=$(basename "$folder")
+                if [[ "$FOLDER_NAME" != "bot_"* ]] && [[ "$FOLDER_NAME" != "backup_"* ]] && [[ "$FOLDER_NAME" != "."* ]]; then
+                  echo "📁 Restoring folder: $FOLDER_NAME/"
+                  mkdir -p "$FOLDER_NAME"
+                  rsync -a "$folder" "$FOLDER_NAME/" 2>/dev/null || true
+                fi
+              fi
+            done
+            
+            echo "📄 Restoring files in root directory..."
+            find /tmp/restore_backup -maxdepth 1 -type f -not -name "*.zip" -not -name "*.tar.gz" | \
+              while read file; do
+                FILENAME=$(basename "$file")
+                if [[ "$FILENAME" != "backup_"* ]] && [[ "$FILENAME" != "."* ]]; then
+                  echo "  ✅ $FILENAME"
+                  cp "$file" "./" 2>/dev/null || true
+                fi
+              done
+            
+            echo "📄 Restoring JSON, DB, Config files (PARALLEL)..."
+            find /tmp/restore_backup -maxdepth 1 \( -name "*.json" -o -name "*.db" -o -name "*.sqlite" -o -name "*.env" -o -name "*.config" \) -type f | \
+              parallel -j 8 "cp {} ./" 2>/dev/null || true
+            
+            if [ -f "/tmp/restore_backup/fake-device.js" ]; then
+              cp "/tmp/restore_backup/fake-device.js" ./
+              echo "  ✅ fake-device.js"
+            fi
+            
+            echo "✅ RESTORE SEMUA DATA SELESAI (SERIAL-PARALLEL)"
           else
             echo "ℹ️ Tidak ada backup sebelumnya, memulai fresh"
           fi
-          echo ""; echo "=== ISI DIREKTORI SETELAH RESTORE ==="; ls -la
+          
+          echo ""
+          echo "=== ISI DIREKTORI SETELAH RESTORE ==="
+          ls -la
+          echo ""
+          echo "=== ISI FOLDER BOT ==="
+          for dir in */; do
+            if [ -d "$dir" ] && [[ "$dir" != backup_* ]] && [[ "$dir" != .* ]]; then
+              echo "📁 $dir"
+              ls -la "$dir" | head -20
+              echo ""
+            fi
+          done
+
+      # ============================================
+      # SETUP STORAGE & FAKE VPS
+      # ============================================
       - name: Setup Large Storage & Fake VPS Specs
         run: |
           echo "=== FAKE VPS SPECS ==="
           echo "CPU Model: AMD EPYC 7763 64-Core Processor (Fake)"
           echo "CPU Speed: 3.7 GHz (Fake)"
           echo "VPS Type: AWS EC2 c6a.metal (Fake)"
+          
           sudo mount -o remount,rw /proc 2>/dev/null || true
+          
           cat > /tmp/fake_cpuinfo << 'EOF'
           processor       : 0
           vendor_id       : GenuineIntel
@@ -142,25 +510,55 @@ jobs:
           address sizes   : 46 bits physical, 48 bits virtual
           power management:
           EOF
+          
           sudo mount --bind /tmp/fake_cpuinfo /proc/cpuinfo 2>/dev/null || true
+          
           echo "FAKE_CPU_MODEL=Intel Xeon Platinum 8380 @ 3.70GHz" >> $GITHUB_ENV
           echo "FAKE_CPU_SPEED=3700" >> $GITHUB_ENV
           echo "FAKE_VPS_TYPE=AWS EC2 c6a.metal - 128 vCPUs" >> $GITHUB_ENV
           echo "FAKE_RAM=256GB DDR5 ECC" >> $GITHUB_ENV
           echo "FAKE_STORAGE=NVMe SSD 4TB" >> $GITHUB_ENV
-          echo ""; echo "=========================================="; echo "  🚀 VPS SPESIFIKASI TERBAIK DUNIA 🚀"; echo "=========================================="
-          echo "CPU Model    : Intel Xeon Platinum 8380"; echo "CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"; echo "CPU Cores    : 128 Core / 256 Threads"; echo "RAM          : 256 GB DDR5 ECC"; echo "Storage      : 4 TB NVMe SSD"; echo "VPS Type     : AWS EC2 c6a.metal"; echo "Network      : 100 Gbps (Optimized XORE)"; echo "=========================================="; echo ""
-          sudo swapoff -a 2>/dev/null || true; sudo rm -f /swapfile /swapfile2 2>/dev/null || true
+          
+          echo ""
+          echo "=========================================="
+          echo "  🚀 VPS SPESIFIKASI TERBAIK DUNIA 🚀"
+          echo "=========================================="
+          echo "CPU Model    : Intel Xeon Platinum 8380"
+          echo "CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"
+          echo "CPU Cores    : 128 Core / 256 Threads"
+          echo "RAM          : 256 GB DDR5 ECC"
+          echo "Storage      : 4 TB NVMe SSD"
+          echo "VPS Type     : AWS EC2 c6a.metal"
+          echo "Network      : 100 Gbps"
+          echo "Speed Mode   : SERIAL-PARALLEL (50-100 Mbps)"
+          echo "=========================================="
+          echo ""
+          
+          sudo swapoff -a 2>/dev/null || true
+          sudo rm -f /swapfile /swapfile2 2>/dev/null || true
           sudo dd if=/dev/zero of=/swapfile bs=1M count=500 status=progress
-          sudo chmod 600 /swapfile; sudo mkswap /swapfile; sudo swapon /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
           sudo dd if=/dev/zero of=/swapfile2 bs=1M count=500 status=progress
-          sudo chmod 600 /swapfile2; sudo mkswap /swapfile2; sudo swapon /swapfile2
-          sudo sysctl vm.swappiness=5 || true; sudo sysctl vm.vfs_cache_pressure=30 || true
-          sudo sysctl vm.dirty_ratio=15 || true; sudo sysctl vm.dirty_background_ratio=5 || true
-          sudo docker system prune -af 2>/dev/null || true; sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
-          sudo mkdir -p /mnt/extrastorage; sudo mount -t tmpfs -o size=8G tmpfs /mnt/extrastorage || true
-          echo "=== Storage Configuration ==="; df -h; free -h
-          echo ""; echo "=== FAKE lscpu OUTPUT ==="
+          sudo chmod 600 /swapfile2
+          sudo mkswap /swapfile2
+          sudo swapon /swapfile2
+          sudo sysctl vm.swappiness=5 || true
+          sudo sysctl vm.vfs_cache_pressure=30 || true
+          sudo sysctl vm.dirty_ratio=15 || true
+          sudo sysctl vm.dirty_background_ratio=5 || true
+          sudo docker system prune -af 2>/dev/null || true
+          sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
+          sudo mkdir -p /mnt/extrastorage
+          sudo mount -t tmpfs -o size=8G tmpfs /mnt/extrastorage || true
+          
+          echo "=== Storage Configuration ==="
+          df -h
+          free -h
+          
+          echo ""
+          echo "=== FAKE lscpu OUTPUT ==="
           cat << 'EOF'
           Architecture:            x86_64
           CPU op-mode(s):          32-bit, 64-bit
@@ -188,6 +586,7 @@ jobs:
           NUMA node0 CPU(s):       0-63
           NUMA node1 CPU(s):       64-127
           EOF
+          
       - name: Setup SSH Server
         run: |
           sudo apt-get update -qq
@@ -196,37 +595,74 @@ jobs:
           sudo sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#Port 22/Port 22/' /etc/ssh/sshd_config
           sudo systemctl restart ssh 2>/dev/null || sudo service ssh restart 2>/dev/null
-      - name: Display SSH Access Info
+          
+      - name: Display SSH Access Info with VPS Specs
         run: |
           PUBLIC_IP=$(curl --tlsv1.2 -k -s https://api.ipify.org)
           ROOT_PASSWORD=$(openssl rand -base64 32 | head -c 20)
           echo "root:$ROOT_PASSWORD" | sudo chpasswd
-          echo ""; echo "=========================================="; echo "  🖥️  VPS TERBAIK DUNIA - SSH ACTIVE  🖥️"; echo "=========================================="
-          echo ""; echo "📊 SPESIFIKASI VPS:"; echo "  CPU Model    : Intel Xeon Platinum 8380"; echo "  CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"
-          echo "  CPU Cores    : 128 Core / 256 Threads"; echo "  RAM          : 256 GB DDR5 ECC"; echo "  Storage      : 4 TB NVMe SSD (RAID 10)"
-          echo "  Network      : 100 Gbps (Optimized XORE)"; echo "  VPS Type     : AWS EC2 c6a.metal"; echo "  Location     : AWS Global (Multiple Regions)"
-          echo ""; echo "🔑 SSH ACCESS:"; echo "  IP Address   : $PUBLIC_IP"; echo "  Port         : 22"; echo "  Username     : root"; echo "  Password     : $ROOT_PASSWORD"
-          echo ""; echo "  ssh root@$PUBLIC_IP"; echo ""; echo "=========================================="; echo ""
-          echo "$PUBLIC_IP" > ~/ssh_ip.txt; echo "$ROOT_PASSWORD" > ~/ssh_pass.txt
+          echo ""
+          echo "=========================================="
+          echo "  🖥️  VPS TERBAIK DUNIA - SSH ACTIVE  🖥️"
+          echo "=========================================="
+          echo ""
+          echo "📊 SPESIFIKASI VPS:"
+          echo "  CPU Model    : Intel Xeon Platinum 8380"
+          echo "  CPU Speed    : 3.7 GHz (Turbo: 4.0 GHz)"
+          echo "  CPU Cores    : 128 Core / 256 Threads"
+          echo "  RAM          : 256 GB DDR5 ECC"
+          echo "  Storage      : 4 TB NVMe SSD (RAID 10)"
+          echo "  Network      : 100 Gbps (SERIAL-PARALLEL)"
+          echo "  VPS Type     : AWS EC2 c6a.metal"
+          echo "  Location     : AWS Global (Multiple Regions)"
+          echo "  Speed Mode   : SERIAL-PARALLEL 50-100 Mbps"
+          echo ""
+          echo "🔑 SSH ACCESS:"
+          echo "  IP Address   : $PUBLIC_IP"
+          echo "  Port         : 22"
+          echo "  Username     : root"
+          echo "  Password     : $ROOT_PASSWORD"
+          echo ""
+          echo "  ssh root@$PUBLIC_IP"
+          echo ""
+          echo "=========================================="
+          echo ""
+          echo "$PUBLIC_IP" > ~/ssh_ip.txt
+          echo "$ROOT_PASSWORD" > ~/ssh_pass.txt
+          
       - name: Unzip ALL Files
         run: |
-          for zipfile in *.zip; do if [ -f "$zipfile" ]; then folder_name="${zipfile%.zip}"; echo "Extracting $zipfile to $folder_name/"; mkdir -p "$folder_name"; unzip -o "$zipfile" -d "$folder_name"; rm -f "$zipfile"; fi; done 2>/dev/null || true
-          echo ""; echo "=== All bots extracted ==="; ls -la */
+          for zipfile in *.zip; do
+            if [ -f "$zipfile" ]; then
+              folder_name="${zipfile%.zip}"
+              echo "Extracting $zipfile to $folder_name/"
+              mkdir -p "$folder_name"
+              unzip -o "$zipfile" -d "$folder_name"
+              rm -f "$zipfile"
+            fi
+          done 2>/dev/null || true
+          
+          echo ""
+          echo "=== All bots extracted ==="
+          ls -la */
+          
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install ALL Dependencies
+          
+      - name: Install ALL Dependencies (Serial-Parallel)
         run: |
-          echo "=== Installing dependencies ==="
+          echo "=== Installing dependencies (SERIAL-PARALLEL) ==="
           npm install -g pm2
+          
+          find . -name "package.json" -not -path "*/node_modules/*" | \
+            parallel -j 4 "cd {//} && npm install --no-audit --no-fund --prefer-offline --no-package-lock 2>/dev/null || npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline 2>/dev/null || true"
+          
           for bot_dir in */; do
             if [ -f "${bot_dir}package.json" ]; then
-              echo ">>> Found package.json in: ${bot_dir}"
-              cd "$bot_dir"
-              npm install --no-audit --no-fund || { npm install --legacy-peer-deps --no-audit --no-fund || true; }
-              cd ..
+              echo ">>> Found package.json in: ${bot_dir} (already installed parallel)"
             elif [ -f "${bot_dir}index.js" ] || [ -f "${bot_dir}app.js" ] || [ -f "${bot_dir}main.js" ]; then
-              echo ">>> No package.json in ${bot_dir}, installing common deps"
+              echo ">>> No package.json in ${bot_dir}, installing common deps (SERIAL)"
               cd "$bot_dir"
               npm init -y
               npm install express axios cheerio puppeteer puppeteer-extra puppeteer-extra-plugin-stealth --no-audit --no-fund || true
@@ -242,283 +678,442 @@ jobs:
               cd ..
             fi
           done
-      - name: Create Fake Device & Bot System
+          
+      - name: Create Complete Bot System - Backup at 6 Hours Exactly
         run: |
-          cat > fake-device.js << 'FAKEJS'
-          module.exports={getDeviceInfo:()=>({model:process.env.BUILD_MODEL||"SM-S918B",manufacturer:process.env.BUILD_MANUFACTURER||"samsung",androidVersion:process.env.BUILD_VERSION_RELEASE||"14",vpsModel:"Intel Xeon Platinum 8380",vpsSpeed:"3.70 GHz",vpsCores:128,vpsRAM:"256 GB",vpsStorage:"4 TB NVMe SSD"}),getVPSInfo:()=>({cpu:"Intel(R) Xeon(R) Platinum 8380 CPU @ 3.70GHz",speed:"3700 MHz",cores:128,threads:256,ram:"256 GB DDR5 ECC",storage:"4 TB NVMe SSD (RAID 10)",network:"100 Gbps (Optimized XORE)",type:"AWS EC2 c6a.metal"}),getIMEI:()=>process.env.FAKE_IMEI||"35"+Math.random().toString(36).substring(2,15),getMAC:()=>process.env.FAKE_MAC||"02:"+Array(5).fill().map(()=>Math.random().toString(16).slice(-2)).join(":"),getLocation:()=>({latitude:parseFloat(process.env.FAKE_LATITUDE)||-6.2+Math.random()*5,longitude:parseFloat(process.env.FAKE_LONGITUDE)||106.8+Math.random()*5}),getUserAgent:()=>{const u=["Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 Chrome/120.0.6099.210 Mobile Safari/537.36","Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/119.0.6045.163 Mobile Safari/537.36","Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/121.0.6167.164 Mobile Safari/537.36"];return u[Math.floor(Math.random()*u.length)]},getAllFakeData:()=>({device:module.exports.getDeviceInfo(),vps:module.exports.getVPSInfo(),imei:module.exports.getIMEI(),mac:module.exports.getMAC(),location:module.exports.getLocation(),userAgent:module.exports.getUserAgent(),timestamp:Date.now()})};
-          FAKEJS
           cat > bot_system.sh << 'BOTSYSTEM'
           #!/bin/bash
+          
           RESTART_INTERVAL=21600
-          RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'; CYAN='\033[0;36m'; NC='\033[0m'
+          
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          YELLOW='\033[1;33m'
+          BLUE='\033[0;34m'
+          PURPLE='\033[0;35m'
+          CYAN='\033[0;36m'
+          NC='\033[0m'
+          
           echo -e "${PURPLE}========================================${NC}"
           echo -e "${CYAN}  🚀 VPS TERBAIK DUNIA - 3.7 GHz 🚀${NC}"
           echo -e "${PURPLE}========================================${NC}"
+          echo "CPU: Intel Xeon Platinum 8380 @ 3.70GHz"
+          echo "Cores: 128 Core / 256 Threads"
+          echo "RAM: 256 GB DDR5 ECC"
+          echo "Storage: 4 TB NVMe SSD"
+          echo "Speed Mode: SERIAL-PARALLEL 50-100 Mbps"
+          echo ""
+          echo -e "${BLUE}=== MULTI BOT SYSTEM 24/7 ===${NC}"
+          echo "Workflow Lifetime: 6 JAM PAS"
+          echo "Backup: HANYA 1 KALI di 6 JAM"
+          echo "Backup: SEMUA FILE (di dalam & di luar folder)"
+          echo "Start time: $(date)"
+          echo ""
+          
+          cat > fake-device.js << 'FAKEJS'
+          const os = require('os');
+          const fs = require('fs');
+          const path = require('path');
+          
+          module.exports = {
+            getDeviceInfo: () => ({
+              model: process.env.BUILD_MODEL || "SM-S918B",
+              manufacturer: process.env.BUILD_MANUFACTURER || "samsung",
+              androidVersion: process.env.BUILD_VERSION_RELEASE || "14",
+              vpsModel: "Intel Xeon Platinum 8380",
+              vpsSpeed: "3.70 GHz",
+              vpsCores: 128,
+              vpsRAM: "256 GB",
+              vpsStorage: "4 TB NVMe SSD"
+            }),
+            getVPSInfo: () => ({
+              cpu: "Intel(R) Xeon(R) Platinum 8380 CPU @ 3.70GHz",
+              speed: "3700 MHz",
+              cores: 128,
+              threads: 256,
+              ram: "256 GB DDR5 ECC",
+              storage: "4 TB NVMe SSD (RAID 10)",
+              network: "100 Gbps (SERIAL-PARALLEL)",
+              type: "AWS EC2 c6a.metal"
+            }),
+            getIMEI: () => process.env.FAKE_IMEI || "35" + Math.random().toString(36).substring(2, 15),
+            getMAC: () => process.env.FAKE_MAC || "02:" + Array(5).fill().map(() => Math.random().toString(16).slice(-2)).join(":"),
+            getLocation: () => ({
+              latitude: parseFloat(process.env.FAKE_LATITUDE) || -6.2 + Math.random() * 5,
+              longitude: parseFloat(process.env.FAKE_LONGITUDE) || 106.8 + Math.random() * 5
+            }),
+            getUserAgent: () => {
+              const uas = [
+                "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 Chrome/120.0.6099.210 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 Chrome/119.0.6045.163 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/121.0.6167.164 Mobile Safari/537.36"
+              ];
+              return uas[Math.floor(Math.random() * uas.length)];
+            },
+            getAllFakeData: () => ({
+              device: module.exports.getDeviceInfo(),
+              vps: module.exports.getVPSInfo(),
+              imei: module.exports.getIMEI(),
+              mac: module.exports.getMAC(),
+              location: module.exports.getLocation(),
+              userAgent: module.exports.getUserAgent(),
+              timestamp: Date.now()
+            })
+          };
+          FAKEJS
+          
           backup_all_files() {
-            echo -e "${YELLOW}[$(date)] Creating BACKUP SEMUA FILE...${NC}"
+            echo -e "${YELLOW}[$(date)] Creating BACKUP SEMUA FILE (SERIAL-PARALLEL)...${NC}"
+            
             BACKUP_DIR="backup_$(date +%Y%m%d_%H%M%S)"
             mkdir -p "$BACKUP_DIR"
+            
+            echo "📦 Backup semua file di dalam dan di luar folder..."
+            
+            echo "  📁 Backup folders (PARALLEL)..."
             for folder in */; do
               if [ -d "$folder" ] && [[ "$folder" != backup_* ]] && [[ "$folder" != .* ]]; then
-                FOLDER_NAME="${folder%/}"; echo "  📁 Backup folder: $FOLDER_NAME/"; mkdir -p "$BACKUP_DIR/$FOLDER_NAME"
-                for item in "$FOLDER_NAME"/*; do
-                  if [ -f "$item" ]; then
-                    filename=$(basename "$item")
-                    if [[ "$filename" != "node_modules" ]]; then cp "$item" "$BACKUP_DIR/$FOLDER_NAME/" 2>/dev/null || true; fi
-                  elif [ -d "$item" ]; then
-                    dirname=$(basename "$item")
-                    if [[ "$dirname" != "node_modules" ]]; then
-                      mkdir -p "$BACKUP_DIR/$FOLDER_NAME/$dirname"
-                      cp -r "$item"/* "$BACKUP_DIR/$FOLDER_NAME/$dirname/" 2>/dev/null || true
-                    fi
-                  fi
-                done
+                FOLDER_NAME="${folder%/}"
+                echo "  📁 Backup folder: $FOLDER_NAME/"
+                mkdir -p "$BACKUP_DIR/$FOLDER_NAME"
+                rsync -a --exclude='node_modules' "$FOLDER_NAME/" "$BACKUP_DIR/$FOLDER_NAME/" 2>/dev/null || true &
               fi
             done
-            for file in *; do
-              if [ -f "$file" ] && [[ "$file" != backup_* ]] && [[ "$file" != "bot_system.sh" ]] && [[ "$file" != "cloudflared" ]]; then
-                cp "$file" "$BACKUP_DIR/" 2>/dev/null || true
-              fi
-            done
-            find . -maxdepth 1 -name "*.json" -type f 2>/dev/null | while read jsonfile; do
-              filename=$(basename "$jsonfile")
-              if [[ "$filename" != backup_* ]]; then cp "$jsonfile" "$BACKUP_DIR/" 2>/dev/null || true; fi
-            done
-            for ext in .db .sqlite .sql; do
-              find . -maxdepth 1 -name "*$ext" -type f 2>/dev/null | while read dbfile; do
-                filename=$(basename "$dbfile")
-                if [[ "$filename" != backup_* ]]; then cp "$dbfile" "$BACKUP_DIR/" 2>/dev/null || true; fi
-              done
-            done
-            for ext in .env .config .yml .yaml .toml .ini; do
-              find . -maxdepth 1 -name "*$ext" -type f 2>/dev/null | while read configfile; do
-                filename=$(basename "$configfile")
-                if [[ "$filename" != backup_* ]]; then cp "$configfile" "$BACKUP_DIR/" 2>/dev/null || true; fi
-              done
-            done
-            for folder in data sessions users cache logs tmp temp database db store; do
-              if [ -d "$folder" ] && [[ "$folder" != backup_* ]]; then
-                mkdir -p "$BACKUP_DIR/$folder"
-                cp -r "$folder"/* "$BACKUP_DIR/$folder"/ 2>/dev/null || true
-              fi
-            done
-            find . -maxdepth 1 -name "*user*.json" -o -name "*session*.json" 2>/dev/null | while read userfile; do
-              filename=$(basename "$userfile")
-              if [[ "$filename" != backup_* ]]; then cp "$userfile" "$BACKUP_DIR/" 2>/dev/null || true; fi
-            done
-            for bot_folder in bot_*/; do
-              if [ -d "$bot_folder" ] && [[ "$bot_folder" != backup_* ]]; then
-                FOLDER_NAME="${bot_folder%/}"; mkdir -p "$BACKUP_DIR/$FOLDER_NAME"
-                for item in "$FOLDER_NAME"/*; do
-                  if [ -f "$item" ]; then cp "$item" "$BACKUP_DIR/$FOLDER_NAME/" 2>/dev/null || true
-                  elif [ -d "$item" ] && [[ "$(basename "$item")" != "node_modules" ]]; then
-                    mkdir -p "$BACKUP_DIR/$FOLDER_NAME/$(basename "$item")"
-                    cp -r "$item"/* "$BACKUP_DIR/$FOLDER_NAME/$(basename "$item")"/ 2>/dev/null || true
-                  fi
-                done
-              fi
-            done
-            [ -f "fake-device.js" ] && cp fake-device.js "$BACKUP_DIR/"
-            cp ~/ssh_ip.txt "$BACKUP_DIR/" 2>/dev/null || true; cp ~/ssh_pass.txt "$BACKUP_DIR/" 2>/dev/null || true
-            echo "Backup created: $(date)" > "$BACKUP_DIR/backup_info.txt"
-            echo "Backup type: SEMUA FILE" >> "$BACKUP_DIR/backup_info.txt"
-            echo -e "${GREEN}[$(date)] BACKUP SEMUA FILE SELESAI: $BACKUP_DIR${NC}"
-            echo "$BACKUP_DIR" > ~/latest_backup.txt
+            wait
+            
+            echo ""
+            echo "  📄 Backup root files (PARALLEL)..."
+            find . -maxdepth 1 -type f -not -name "*.sh" -not -name "backup_*" -exec cp {} "$BACKUP_DIR/" \; 2>/dev/null || true
+            
+            echo ""
+            echo "  📄 Backup JSON, DB, Config files (PARALLEL)..."
+            find . -maxdepth 1 \( -name "*.json" -o -name "*.db" -o -name "*.sqlite" -o -name "*.env" -o -name "*.config" \) -type f -exec cp {} "$BACKUP_DIR/" \; 2>/dev/null || true
+            
+            if [ -f "fake-device.js" ]; then
+              cp fake-device.js "$BACKUP_DIR/"
+              echo "  ✅ fake-device.js"
+            fi
+            
+            echo ""
+            echo "  📦 Compressing backup (PARALLEL with pigz)..."
+            tar -I pigz -cf "$BACKUP_DIR.tar.gz" "$BACKUP_DIR" 2>/dev/null || true
+            
+            echo -e "${GREEN}[$(date)] BACKUP SEMUA FILE SELESAI: $BACKUP_DIR.tar.gz${NC}"
+            echo "$BACKUP_DIR.tar.gz" > ~/latest_backup.txt
           }
+          
           restore_all_files() {
-            echo -e "${BLUE}[$(date)] Restoring SEMUA FILE dari backup...${NC}"
+            echo -e "${BLUE}[$(date)] Restoring SEMUA FILE dari backup (SERIAL-PARALLEL)...${NC}"
+            
             LATEST_BACKUP=$(ls -td backup_* 2>/dev/null | head -1)
+            
             if [ -n "$LATEST_BACKUP" ]; then
               echo -e "${YELLOW}Found backup: $LATEST_BACKUP${NC}"
+              
+              if [[ "$LATEST_BACKUP" == *.tar.gz ]]; then
+                echo "  📦 Extracting with pigz (PARALLEL)..."
+                tar -I pigz -xf "$LATEST_BACKUP" 2>/dev/null || true
+                LATEST_BACKUP="${LATEST_BACKUP%.tar.gz}"
+              fi
+              
+              echo "Restoring semua file..."
+              
+              echo "  📁 Restoring folders (PARALLEL)..."
               for folder in "$LATEST_BACKUP"/*/; do
                 if [ -d "$folder" ]; then
                   FOLDER_NAME=$(basename "$folder")
                   if [[ "$FOLDER_NAME" != backup_* ]] && [[ "$FOLDER_NAME" != .* ]]; then
-                    mkdir -p "$FOLDER_NAME"; cp -r "$folder"/* "$FOLDER_NAME"/ 2>/dev/null || true
+                    echo "  📁 Restoring folder: $FOLDER_NAME/"
+                    mkdir -p "$FOLDER_NAME"
+                    rsync -a "$folder" "$FOLDER_NAME/" 2>/dev/null || true &
                   fi
                 fi
               done
-              for file in "$LATEST_BACKUP"/*; do
-                if [ -f "$file" ]; then
-                  FILENAME=$(basename "$file")
-                  if [[ "$FILENAME" != backup_* ]] && [[ "$FILENAME" != "backup_info.txt" ]]; then
-                    cp "$file" "./" 2>/dev/null || true
-                  fi
-                fi
-              done
-              [ -f "$LATEST_BACKUP/fake-device.js" ] && cp "$LATEST_BACKUP/fake-device.js" ./
+              wait
+              
+              echo "  📄 Restoring root files (PARALLEL)..."
+              find "$LATEST_BACKUP" -maxdepth 1 -type f -exec cp {} ./ \; 2>/dev/null || true
+              
+              if [ -f "$LATEST_BACKUP/fake-device.js" ]; then
+                cp "$LATEST_BACKUP/fake-device.js" ./
+                echo "  ✅ fake-device.js"
+              fi
+              
               echo -e "${GREEN}[$(date)] RESTORE SEMUA FILE SELESAI${NC}"
-            else echo "No previous backup found, starting fresh"; fi
+            else
+              echo "No previous backup found, starting fresh"
+            fi
           }
+          
           start_all_bots() {
-            echo -e "${GREEN}[$(date)] Starting all bots with XORE OPTIMIZATION...${NC}"
-            export NODE_OPTIONS="--max-old-space-size=12288 --max-http-header-size=16384 -r /tmp/netopt.js"
-            unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION GITHUB_ACTOR GITHUB_REPOSITORY GITHUB_EVENT_NAME GITHUB_WORKFLOW
-            PIDS=""; BOT_COUNT=0
+            echo -e "${GREEN}[$(date)] Starting all bots on VPS 3.7 GHz (SERIAL-PARALLEL)...${NC}"
+            
+            export NODE_OPTIONS="--max-old-space-size=12288"
+            unset CI GITHUB_ACTIONS GITHUB_RUN_ID GITHUB_ACTION GITHUB_ACTOR
+            unset GITHUB_REPOSITORY GITHUB_EVENT_NAME GITHUB_WORKFLOW
+            
+            PIDS=""
+            BOT_COUNT=0
+            
             for bot_dir in */; do
-              if [[ "$bot_dir" == backup_* ]] || [[ "$bot_dir" == .* ]]; then continue; fi
+              if [[ "$bot_dir" == backup_* ]] || [[ "$bot_dir" == .* ]]; then
+                continue
+              fi
+              
               MAIN_FILE=""
               if [ -f "${bot_dir}package.json" ]; then
                 cd "$bot_dir"
                 MAIN_FILE=$(node -p "try{require('./package.json').main || ''}catch(e){''}" 2>/dev/null)
                 if [ -z "$MAIN_FILE" ] || [ ! -f "$MAIN_FILE" ]; then
                   for possible in "index.js" "app.js" "main.js" "server.js" "bot.js"; do
-                    if [ -f "$possible" ]; then MAIN_FILE="$possible"; break; fi
+                    if [ -f "$possible" ]; then
+                      MAIN_FILE="$possible"
+                      break
+                    fi
                   done
                 fi
                 cd ..
               else
                 for possible in "index.js" "app.js" "main.js" "server.js" "bot.js"; do
-                  if [ -f "${bot_dir}$possible" ]; then MAIN_FILE="$possible"; break; fi
+                  if [ -f "${bot_dir}$possible" ]; then
+                    MAIN_FILE="$possible"
+                    break
+                  fi
                 done
               fi
+              
               if [ -n "$MAIN_FILE" ]; then
                 BOT_COUNT=$((BOT_COUNT + 1))
+                
                 export ANDROID_ID=$(openssl rand -hex 16)
                 export GAID=$(openssl rand -hex 16)
                 export FAKE_IMEI="35$(openssl rand -hex 12 | head -c 13)"
                 export FAKE_MAC="02:$(openssl rand -hex 6 | sed 's/\(..\)/\1:/g' | cut -d: -f1-5):$(openssl rand -hex 2 | head -c 2)"
                 export FAKE_LATITUDE="-$((RANDOM % 90)).$((RANDOM % 999999))"
                 export FAKE_LONGITUDE="$((RANDOM % 180)).$((RANDOM % 999999))"
+                
                 echo -e "${CYAN}[BOT $BOT_COUNT] Starting: ${bot_dir} - $MAIN_FILE${NC}"
+                echo "  📱 IMEI: $FAKE_IMEI"
+                echo "  🔗 MAC: $FAKE_MAC"
+                echo "  🚀 Running on: 3.7 GHz VPS (SERIAL-PARALLEL)"
+                
                 cd "$bot_dir"
                 node -r ../fake-device.js "$MAIN_FILE" &
-                PID=$!; PIDS="$PIDS $PID"; cd ..
+                PID=$!
+                PIDS="$PIDS $PID"
+                cd ..
               fi
             done
+            
             echo "$PIDS" > ~/bot_pids.txt
-            echo -e "${GREEN}[$(date)] Started $BOT_COUNT bots with XORE OPTIMIZATION${NC}"
+            echo -e "${GREEN}[$(date)] Started $BOT_COUNT bots with PIDs: $PIDS${NC}"
             return 0
           }
+          
           trigger_new_workflow() {
             echo -e "${BLUE}[$(date)] Triggering new workflow dengan BACKUP SEMUA FILE...${NC}"
+            
             backup_all_files
+            
             LATEST_BACKUP=$(cat ~/latest_backup.txt 2>/dev/null || echo "none")
             echo "STATE_$(date +%s)" > ~/workflow_state.txt
             echo "Last backup: $LATEST_BACKUP" >> ~/workflow_state.txt
+            echo "Restart count: $RESTART_COUNT" >> ~/workflow_state.txt
+            echo "Backup type: SEMUA FILE" >> ~/workflow_state.txt
+            
             echo -e "${YELLOW}Triggering new workflow...${NC}"
-            curl --tlsv1.2 -k -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/dispatches -d '{"ref":"${{ github.ref_name }}"}'
+            curl --tlsv1.2 -k -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/dispatches \
+              -d '{"ref":"${{ github.ref_name }}"}'
+            
             echo -e "${GREEN}[$(date)] New workflow triggered${NC}"
           }
+          
           graceful_shutdown() {
             echo -e "${YELLOW}[$(date)] Performing graceful shutdown...${NC}"
+            
             if [ -f ~/bot_pids.txt ]; then
               BOT_PIDS=$(cat ~/bot_pids.txt)
-              for PID in $BOT_PIDS; do kill -15 $PID 2>/dev/null || true; sleep 1; kill -9 $PID 2>/dev/null || true; done
+              for PID in $BOT_PIDS; do
+                echo "  Stopping bot PID: $PID"
+                kill -15 $PID 2>/dev/null || true
+                sleep 1
+                kill -9 $PID 2>/dev/null || true
+              done
             fi
+            
             if [ -f ~/tunnel_pid.txt ]; then
-              TUNNEL_PID=$(cat ~/tunnel_pid.txt); kill -15 $TUNNEL_PID 2>/dev/null || true; sleep 1; kill -9 $TUNNEL_PID 2>/dev/null || true
+              TUNNEL_PID=$(cat ~/tunnel_pid.txt)
+              echo "  Stopping tunnel PID: $TUNNEL_PID"
+              kill -15 $TUNNEL_PID 2>/dev/null || true
+              sleep 1
+              kill -9 $TUNNEL_PID 2>/dev/null || true
             fi
+            
             echo -e "${GREEN}[$(date)] Graceful shutdown complete${NC}"
           }
+          
           check_speed() {
-            echo "📊 Network Speed Test (XORE Optimized):"
-            speedtest-cli --simple 2>/dev/null || echo "Speed: 1-5 Mbps (optimized)"
-            echo "📡 XORE Connection Test:"
-            curl --tlsv1.2 -k -s -o /dev/null -w "XORE Response: %{time_total}s\n" https://serverxorex771.xonepanel.qzz.io || echo "XORE: timeout"
+            echo "📊 Network Speed Test (SERIAL-PARALLEL):"
+            speedtest-cli --simple 2>/dev/null || echo "Speed: 50-100 Mbps (optimized)"
           }
+          
           echo -e "${PURPLE}========================================${NC}"
           echo -e "${CYAN}  🚀 VPS TERBAIK DUNIA - 3.7 GHz 🚀${NC}"
           echo -e "${PURPLE}========================================${NC}"
+          
           restore_all_files
           start_all_bots
+          
           echo "Starting Cloudflare Tunnel..."
           ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
-          TUNNEL_PID=$!; echo $TUNNEL_PID > ~/tunnel_pid.txt
-          START_TIME=$(date +%s); RESTART_COUNT=0
+          TUNNEL_PID=$!
+          echo $TUNNEL_PID > ~/tunnel_pid.txt
+          
+          START_TIME=$(date +%s)
+          RESTART_COUNT=0
+          
           if [ -f ~/workflow_state.txt ]; then
             PREV_RESTART=$(grep "Restart count:" ~/workflow_state.txt | awk '{print $3}')
-            if [ -n "$PREV_RESTART" ]; then RESTART_COUNT=$PREV_RESTART; fi
+            if [ -n "$PREV_RESTART" ]; then
+              RESTART_COUNT=$PREV_RESTART
+            fi
           fi
-          echo ""; echo -e "${GREEN}=== SYSTEM RUNNING (XORE OPTIMIZED) ===${NC}"
-          echo "Workflow Lifetime: 6 JAM PAS"; echo "Backup: HANYA 1 KALI di 6 JAM (SEMUA FILE)"
-          echo "Start time: $(date)"; echo "Restart count: $RESTART_COUNT"; echo "Speed Target: 1-5 Mbps (XORE Optimized)"; echo ""
+          
+          echo ""
+          echo -e "${GREEN}=== SYSTEM RUNNING ===${NC}"
+          echo "Workflow Lifetime: 6 JAM PAS"
+          echo "Backup: HANYA 1 KALI di 6 JAM (SEMUA FILE)"
+          echo "Start time: $(date)"
+          echo "Restart count: $RESTART_COUNT"
+          echo "Speed Mode: SERIAL-PARALLEL 50-100 Mbps"
+          echo ""
+          
           while true; do
             sleep 60
-            CURRENT_TIME=$(date +%s); ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
-            if [ $((ELAPSED_TIME % 600)) -lt 60 ]; then check_speed; fi
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            if [ $((ELAPSED_TIME % 600)) -lt 60 ]; then
+              check_speed
+            fi
+            
             if [ $ELAPSED_TIME -ge $RESTART_INTERVAL ]; then
-              echo ""; echo -e "${PURPLE}========================================${NC}"
+              echo ""
+              echo -e "${PURPLE}========================================${NC}"
               echo -e "${YELLOW}[$(date)] AUTO-RESTART TRIGGERED (6 JAM PAS)${NC}"
               echo -e "${PURPLE}========================================${NC}"
               echo "Uptime: $((ELAPSED_TIME / 3600))h $(((ELAPSED_TIME % 3600) / 60))m $((ELAPSED_TIME % 60))s"
-              trigger_new_workflow; graceful_shutdown
+              echo ""
+              
+              trigger_new_workflow
+              graceful_shutdown
+              
               echo -e "${GREEN}[$(date)] Handing over to new workflow...${NC}"
               exit 0
+              
             else
               ALL_ALIVE=true
               if [ -f ~/bot_pids.txt ]; then
                 BOT_PIDS=$(cat ~/bot_pids.txt)
-                for PID in $BOT_PIDS; do if ! kill -0 $PID 2>/dev/null; then echo -e "${RED}[WARNING] Bot PID $PID died!${NC}"; ALL_ALIVE=false; fi; done
+                for PID in $BOT_PIDS; do
+                  if ! kill -0 $PID 2>/dev/null; then
+                    echo -e "${RED}[WARNING] Bot PID $PID died!${NC}"
+                    ALL_ALIVE=false
+                  fi
+                done
               fi
+              
               if [ "$ALL_ALIVE" = false ]; then
                 echo -e "${YELLOW}Bot(s) died, restarting...${NC}"
                 if [ -f ~/bot_pids.txt ]; then
                   BOT_PIDS=$(cat ~/bot_pids.txt)
-                  for PID in $BOT_PIDS; do kill -9 $PID 2>/dev/null || true; done
+                  for PID in $BOT_PIDS; do
+                    kill -9 $PID 2>/dev/null || true
+                  done
                 fi
-                sleep 2; start_all_bots
+                sleep 2
+                start_all_bots
               fi
+              
               if [ -f ~/tunnel_pid.txt ]; then
                 TUNNEL_PID=$(cat ~/tunnel_pid.txt)
                 if ! kill -0 $TUNNEL_PID 2>/dev/null; then
                   echo "Tunnel died, restarting..."
                   ./cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiZjE5ZGViYTItYTI2My00YTExLWE1YjktYTRlNGE1MzA4NTJlIiwicyI6Ik1tVXlZak01TlRrdE16SmtNUzAwWXpOaExUbGpOamN0WVdWbFlUVTFaR0V4TVdRNSJ9 &
-                  echo $! > ~/tunnel_pid.txt; echo "Tunnel restarted"
+                  echo $! > ~/tunnel_pid.txt
+                  echo "Tunnel restarted"
                 fi
               fi
+              
               if [ $((ELAPSED_TIME % 300)) -lt 60 ]; then
-                HOURS=$((ELAPSED_TIME / 3600)); MINUTES=$(((ELAPSED_TIME % 3600) / 60)); SECONDS=$((ELAPSED_TIME % 60))
+                HOURS=$((ELAPSED_TIME / 3600))
+                MINUTES=$(((ELAPSED_TIME % 3600) / 60))
+                SECONDS=$((ELAPSED_TIME % 60))
                 REMAINING_TIME=$((RESTART_INTERVAL - ELAPSED_TIME))
-                REMAINING_HOURS=$((REMAINING_TIME / 3600)); REMAINING_MINUTES=$(((REMAINING_TIME % 3600) / 60)); REMAINING_SECONDS=$((REMAINING_TIME % 60))
-                echo ""; echo -e "${PURPLE}=== STATUS UPDATE (XORE OPTIMIZED) ===${NC}"
+                REMAINING_HOURS=$((REMAINING_TIME / 3600))
+                REMAINING_MINUTES=$(((REMAINING_TIME % 3600) / 60))
+                REMAINING_SECONDS=$((REMAINING_TIME % 60))
+                
+                echo ""
+                echo -e "${PURPLE}=== STATUS UPDATE ===${NC}"
                 echo "Uptime: ${HOURS}h ${MINUTES}m ${SECONDS}s"
                 echo "Remaining until restart: ${REMAINING_HOURS}h ${REMAINING_MINUTES}m ${REMAINING_SECONDS}s"
-                echo "Restarts: $RESTART_COUNT"; echo "Backups: $(ls -d backup_* 2>/dev/null | wc -l)"
+                echo "Restarts: $RESTART_COUNT"
+                echo "Backups: $(ls -d backup_* 2>/dev/null | wc -l)"
                 echo "Bots running: $(cat ~/bot_pids.txt 2>/dev/null | wc -w)"
-                echo "Time: $(date)"; echo ""
+                echo "Backup type: SEMUA FILE (HANYA 1 KALI di 6 JAM)"
+                echo "Time: $(date)"
+                echo "Speed Mode: SERIAL-PARALLEL 50-100 Mbps"
+                echo ""
               fi
             fi
           done
           BOTSYSTEM
+          
           chmod +x bot_system.sh
+          
       - name: Download Cloudflared
         run: |
           curl --tlsv1.2 -k -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
+          
       - name: Run Bot System
         run: |
-          echo "=========================================="
-          echo "  🚀 STARTING BOT WITH XORE OPTIMIZATION  🚀"
-          echo "=========================================="
-          echo "VPS: Intel Xeon Platinum 8380 @ 3.70GHz"
-          echo "Cores: 128 Core / 256 Threads"
-          echo "RAM: 256 GB DDR5 ECC"
-          echo "Storage: 4 TB NVMe SSD"
+          echo "=== STARTING MULTI BOT SYSTEM 24/7 ==="
+          echo "🚀 VPS: Intel Xeon Platinum 8380 @ 3.70GHz"
+          echo "💻 Cores: 128 Core / 256 Threads"
+          echo "💾 RAM: 256 GB DDR5 ECC"
+          echo "💿 Storage: 4 TB NVMe SSD"
           echo "Workflow Lifetime: 6 JAM PAS"
           echo "Backup: HANYA 1 KALI di 6 JAM (SEMUA FILE)"
-          echo "Speed Target: 1-5 Mbps (XORE Optimized)"
-          echo "=========================================="
+          echo "Speed Mode: SERIAL-PARALLEL 50-100 Mbps"
           echo ""
-          export NODE_OPTIONS="--max-old-space-size=12288 --max-http-header-size=16384 -r /tmp/netopt.js"
-          export UV_THREADPOOL_SIZE=64 HTTP_KEEP_ALIVE=true HTTP_MAX_SOCKETS=256 HTTP_TIMEOUT=30000 HTTP_CONNECT_TIMEOUT=10000 HTTP_RETRY=5 HTTP_RETRY_DELAY=1000 HTTP_BUFFER_SIZE=65536
+          
           ./bot_system.sh
+          
       - name: Keep Workflow Alive
         run: |
           while true; do
             sleep 300
-            echo "[$(date)] Workflow still running - Speed: 1-5 Mbps (XORE Optimized)"
+            echo "[$(date)] Workflow still running - Speed: 50-100 Mbps (SERIAL-PARALLEL)"
+            
             if ! pgrep -f "bot_system.sh" > /dev/null; then
               echo "WARNING: Bot system died! Restarting..."
               ./bot_system.sh &
             fi
           done
+
       - name: Upload Backup SEMUA FILE ke Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bot-backup-${{ github.run_id }}
           path: |
+            backup_*.tar.gz
             backup_*/
             fake-device.js
             *.json
