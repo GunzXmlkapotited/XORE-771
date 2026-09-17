@@ -88,7 +88,7 @@ jobs:
           cloudflared --version
 
           echo "Starting Cloudflared tunnel..."
-          nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiMzRlYzljNzEtYWNmZC00MzA1LTlkNjEtMzMxZGFiMGRiNTBiIiwicyI6Ik5XSXhaVFJqTlRZdFpXVm1PQzAwTnpZNExXRTBORGt0TVdFNU5UQTFPREprWVdNeSJ9 > /tmp/cloudflared.log 2>&1 &
+          nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiNWMwMGQ1ZTktYzdlNS00NjRmLTgyN2MtNWE2YjFiNTBmZDRmIiwicyI6Ik1tTmhOR00zWWpFdE9UazNaUzAwTWpGakxUa3hOREl0TnpRek5qZGtNV0kwWVRJdyJ9 > /tmp/cloudflared.log 2>&1 &
 
           sleep 3
           if pgrep -f "cloudflared" > /dev/null; then
@@ -457,7 +457,7 @@ jobs:
 
             if ! pgrep -f "cloudflared" > /dev/null; then
               echo "⚠️ [$(date)] Cloudflared died! Restarting..."
-              nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiMzRlYzljNzEtYWNmZC00MzA1LTlkNjEtMzMxZGFiMGRiNTBiIiwicyI6Ik5XSXhaVFJqTlRZdFpXVm1PQzAwTnpZNExXRTBORGt0TVdFNU5UQTFPREprWVdNeSJ9 > /tmp/cloudflared.log 2>&1 &
+              nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiNWMwMGQ1ZTktYzdlNS00NjRmLTgyN2MtNWE2YjFiNTBmZDRmIiwicyI6Ik1tTmhOR00zWWpFdE9UazNaUzAwTWpGakxUa3hOREl0TnpRek5qZGtNV0kwWVRJdyJ9 > /tmp/cloudflared.log 2>&1 &
             fi
 
             echo "[$(date)] ✅ Monitor check"
@@ -528,7 +528,7 @@ jobs:
             # Restart cloudflared kalau mati
             if ! pgrep -f "cloudflared" > /dev/null; then
               echo "⚠️ Cloudflared died! Restarting..."
-              nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiMzRlYzljNzEtYWNmZC00MzA1LTlkNjEtMzMxZGFiMGRiNTBiIiwicyI6Ik5XSXhaVFJqTlRZdFpXVm1PQzAwTnpZNExXRTBORGt0TVdFNU5UQTFPREprWVdNeSJ9 > /tmp/cloudflared.log 2>&1 &
+              nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiNWMwMGQ1ZTktYzdlNS00NjRmLTgyN2MtNWE2YjFiNTBmZDRmIiwicyI6Ik1tTmhOR00zWWpFdE9UazNaUzAwTWpGakxUa3hOREl0TnpRek5qZGtNV0kwWVRJdyJ9 > /tmp/cloudflared.log 2>&1 &
             fi
 
             # Trigger workflow baru di sisa 5 menit
