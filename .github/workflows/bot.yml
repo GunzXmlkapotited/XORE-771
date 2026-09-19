@@ -6,12 +6,12 @@ on:
     - cron: '0 */6 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.run_id }}
   cancel-in-progress: false
 
 permissions:
   actions: write
-  contents: read
+  contents: write
 
 jobs:
   bot:
@@ -20,6 +20,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Keep repository active
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          use_api: true
 
       - name: Install Dependencies
         run: |
@@ -111,7 +116,6 @@ jobs:
           ls -la
           echo ""
 
-          # Extract .zip
           shopt -s nullglob
           for zipfile in *.zip; do
             if [ -f "$zipfile" ]; then
@@ -127,7 +131,6 @@ jobs:
             fi
           done
 
-          # Extract .rar
           for rarfile in *.rar; do
             if [ -f "$rarfile" ]; then
               echo "📦 Extracting: $rarfile"
@@ -147,7 +150,6 @@ jobs:
             fi
           done
 
-          # Extract .7z
           for sevenzfile in *.7z; do
             if [ -f "$sevenzfile" ]; then
               echo "📦 Extracting: $sevenzfile"
@@ -313,7 +315,6 @@ jobs:
           find_all_bots() {
             BOT_FILES=()
 
-            # 1. File .js di root
             shopt -s nullglob
             for f in *.js; do
               [ -f "$f" ] || continue
@@ -326,7 +327,6 @@ jobs:
               fi
             done
 
-            # 2. Subdirectory dengan package.json atau file entry point
             for dir in */; do
               [ -d "$dir" ] || continue
               case "$dir" in
@@ -375,7 +375,6 @@ jobs:
             echo "🚀 [$(date '+%H:%M:%S')] Starting: $MAIN_FILE (from $BOT_DIR)"
 
             cd "$BOT_DIR"
-            # Console log real-time dengan prefix
             node "$BOT_FILE" 2>&1 | stdbuf -oL -eL sed -u "s/^/[$BOT_NAME] /"
             local EXIT_CODE=${PIPESTATUS[0]}
             cd - > /dev/null
@@ -405,7 +404,6 @@ jobs:
               return 1
             fi
 
-            # Jalankan tiap bot di background dengan loop restart masing-masing
             local PIDS=()
             for MAIN_FILE in "${BOT_FILES[@]}"; do
               run_bot_forever "$MAIN_FILE" &
@@ -418,13 +416,11 @@ jobs:
             echo "=========================================="
             echo ""
 
-            # Tunggu semua proses
             for pid in "${PIDS[@]}"; do
               wait "$pid"
             done
           }
 
-          # Re-scan dan restart semua kalau ada yang mati
           while true; do
             run_all_bots
             echo "⚠️ All bots exited. Re-scanning in 10s..."
@@ -510,10 +506,8 @@ jobs:
             echo "   Remaining : $((REMAINING / 3600))h $(((REMAINING % 3600) / 60))m $((REMAINING % 60))s"
             echo "════════════════════════════════════════════"
 
-            # Tampilkan console log terakhir dari setiap bot (via screen hardcopy)
             if screen -list | grep -q "bot"; then
               echo "📺 Bot screen is ALIVE"
-              # Dump layar bot
               screen -S bot -X hardcopy /tmp/bot_screen.log 2>/dev/null
               if [ -f /tmp/bot_screen.log ]; then
                 echo "───── 📜 BOT CONSOLE (last 40 lines) ─────"
@@ -525,13 +519,11 @@ jobs:
               screen -dmS bot bash start_bot.sh
             fi
 
-            # Restart cloudflared kalau mati
             if ! pgrep -f "cloudflared" > /dev/null; then
               echo "⚠️ Cloudflared died! Restarting..."
               nohup cloudflared tunnel run --token eyJhIjoiY2FkNjFhM2UyYzk5Y2NiN2IwNTQ2MmU0MWY1N2JjNTYiLCJ0IjoiNWMwMGQ1ZTktYzdlNS00NjRmLTgyN2MtNWE2YjFiNTBmZDRmIiwicyI6Ik1tTmhOR00zWWpFdE9UazNaUzAwTWpGakxUa3hOREl0TnpRek5qZGtNV0kwWVRJdyJ9 > /tmp/cloudflared.log 2>&1 &
             fi
 
-            # Trigger workflow baru di sisa 5 menit
             if [ $REMAINING -lt 300 ] && [ $LAST_TRIGGER -eq 0 ]; then
               echo ""
               echo "🔄 Triggering new workflow (5 min remaining)..."
